@@ -173,10 +173,6 @@ fn parse_usdt_transfer(tx: &[u8]) -> Option<UsdtTransfer> {
     Some(UsdtTransfer { to, value })
 }
 
-type InflowSet = sol! {
-    tuple(address, uint64)[]
-};
-
 fn hash_chain(elements: &[Vec<u8>]) -> Vec<u8> {
     let mut result = Vec::new();
     for element in elements {
@@ -185,6 +181,10 @@ fn hash_chain(elements: &[Vec<u8>]) -> Vec<u8> {
     }
     result
 }
+
+type PublicValues = sol! {
+    tuple(uint32,uint32,bytes32,tuple(uint32,bytes32)[],tuple(address,uint64)[])
+};
 
 pub fn main() {
     let mut address_map = HashMap::new();
@@ -205,10 +205,14 @@ pub fn main() {
     commit(&start_block);
     let end_block = read::<u32>();
     commit(&end_block);
-    let chain_print = hash(&address_chains);
+    let mut chain_print = [0u8; 32];
+    chain_print.copy_from_slice(&hash(&address_chains));
     commit_slice(&chain_print);
 
     let mut active_addresses = Vec::new();
+    let mut inflows: HashMap<[u8; 20], u64> = HashMap::new();
+
+    let mut tx_roots = Vec::new();
 
     for block_number in start_block..=end_block {
         let addresses = address_map.get(&block_number);
@@ -239,7 +243,25 @@ pub fn main() {
 
         let tx_hashes: Vec<Vec<u8>> = txs.iter().map(|tx| hash(tx)).collect();
 
-        let tx_root = create_merkle_tree(&tx_hashes);
+        let mut tx_root = [0u8; 32];
+        tx_root.copy_from_slice(&create_merkle_tree(&tx_hashes));
+        // commit(&block_number);
         commit_slice(&tx_root);
+        tx_roots.push((block_number, tx_root));
+
+        for tx in txs.iter() {
+            let Some(transfer) = parse_usdt_transfer(tx) else {
+                continue;
+            };
+
+            *inflows.entry(transfer.to).or_insert(0) += transfer.value;
+        }
     }
+
+    let inflows: Vec<([u8; 20], u64)> = inflows.into_iter().collect();
+
+    let public_values =
+        PublicValues::abi_encode(&(start_block, end_block, chain_print, tx_roots, inflows));
+
+    commit_slice(&public_values);
 }
