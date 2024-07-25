@@ -1,9 +1,12 @@
 #![no_main]
 sp1_zkvm::entrypoint!(main);
 
+use std::collections::{HashMap, HashSet};
+
 use alloy_sol_types::{sol, SolType};
 use hex_literal::hex;
 use sha2::{Digest, Sha256};
+use sp1_zkvm::io::*;
 
 fn hash(data: &[u8]) -> Vec<u8> {
     let mut hasher = Sha256::new();
@@ -174,18 +177,69 @@ type InflowSet = sol! {
     tuple(address, uint64)[]
 };
 
-pub fn main() {
-    let tx_count = sp1_zkvm::io::read::<u32>();
+fn hash_chain(elements: &[Vec<u8>]) -> Vec<u8> {
+    let mut result = Vec::new();
+    for element in elements {
+        result.extend_from_slice(element);
+        result = hash(&result);
+    }
+    result
+}
 
-    let mut txs = Vec::new();
-    for _ in 0..tx_count {
-        // txs must be inputted in such an order that
-        // their SHA256 hashes are sorted alphabetically
-        txs.push(sp1_zkvm::io::read_vec());
+pub fn main() {
+    let mut address_map = HashMap::new();
+    let chain_count = read::<u32>();
+    let mut address_chains: Vec<u8> = Vec::new();
+
+    for _ in 0..chain_count {
+        let creation_block = read::<u32>();
+        let address_count = read::<u32>();
+        let addresses: Vec<Vec<u8>> = (0..address_count).map(|_| read_vec()).collect();
+
+        address_chains.extend_from_slice(&creation_block.to_be_bytes());
+        address_chains.extend_from_slice(&hash_chain(&addresses));
+        address_map.insert(creation_block, addresses);
     }
 
-    let tx_hashes: Vec<Vec<u8>> = txs.iter().map(|tx| hash(tx)).collect();
+    let start_block = read::<u32>();
+    commit(&start_block);
+    let end_block = read::<u32>();
+    commit(&end_block);
+    let chain_print = hash(&address_chains);
+    commit_slice(&chain_print);
 
-    let tx_root = create_merkle_tree(&tx_hashes);
-    sp1_zkvm::io::commit_slice(&tx_root);
+    let mut active_addresses = Vec::new();
+
+    for block_number in start_block..=end_block {
+        let addresses = address_map.get(&block_number);
+        if let Some(addresses) = addresses {
+            addresses
+                .iter()
+                .for_each(|address| active_addresses.push(address.clone()));
+        }
+
+        let old_addresses = address_map.get(&(block_number - 100));
+        if let Some(old_addresses) = old_addresses {
+            let set: HashSet<_> = old_addresses.iter().cloned().collect();
+            active_addresses.retain(|x| !set.contains(x));
+        }
+
+        if active_addresses.is_empty() {
+            continue;
+        }
+
+        let tx_count = read::<u32>();
+
+        let mut txs = Vec::new();
+        for _ in 0..tx_count {
+            // txs must be inputted in such an order that
+            // their SHA256 hashes are sorted alphabetically
+            txs.push(read_vec());
+        }
+
+        let tx_hashes: Vec<Vec<u8>> = txs.iter().map(|tx| hash(tx)).collect();
+
+        let tx_root = create_merkle_tree(&tx_hashes);
+        commit_slice(&tx_root);
+    }
 }
