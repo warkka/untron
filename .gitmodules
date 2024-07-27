@@ -6,3 +6,6 @@
 	path = contracts/lib/sp1-contracts
 	url = https://github.com/succinctlabs/sp1-contracts
 	tag = main
+[submodule "script/java-tron"]
+	path = script/java-tron
+	url = https://github.com/tronprotocol/java-tron

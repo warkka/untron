@@ -161,8 +161,8 @@ pub fn main() {
 
         let price = order.cycles_spent as u64 * mcycles_cost / 1_000_000;
         invoice += price;
-        paymaster_fine += price - order.inflow;
-        state_print.extend_from_slice(&(order.inflow - price).to_be_bytes());
+        paymaster_fine += price.saturating_sub(order.inflow);
+        state_print.extend_from_slice(&(order.inflow.saturating_sub(price)).to_be_bytes());
     }
 
     let mut new_state_hash = [0u8; 32];
