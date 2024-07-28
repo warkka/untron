@@ -30,7 +30,7 @@ type OrderChain = sol! {
 };
 
 type Block = sol! {
-    tuple(uint32,bytes32,uint32)
+    tuple(bytes32,uint32,bytes32,uint32)
 };
 
 type Inflows = sol! {
@@ -50,7 +50,7 @@ pub fn main() {
     let mut active_addresses = HashSet::new();
 
     let state_length = read::<u32>();
-    let mut state_print = Vec::with_capacity((28 * state_length) as usize);
+    let mut state_print = Vec::with_capacity((32 * state_length) as usize);
     for _ in 0..state_length {
         let address = read::<[u8; 20]>();
         let timestamp = read::<u32>();
@@ -102,10 +102,18 @@ pub fn main() {
 
     for block_number in start_block..=end_block {
         let timestamp = read::<u32>();
+        let tx_count = read::<u32>();
+
+        let mut txs = Vec::new();
+        for _ in 0..tx_count {
+            // txs must be inputted in such an order that
+            // their SHA256 hashes are sorted alphabetically
+            txs.push(read_vec());
+        }
 
         let state_copy = state.clone();
         for (address, order) in state_copy {
-            if order.timestamp + ORDER_TTL > timestamp {
+            if order.timestamp > timestamp + ORDER_TTL {
                 state.remove(&address);
                 closed_orders.insert(address, order);
                 active_addresses.remove(&address);
@@ -116,14 +124,9 @@ pub fn main() {
             }
         }
 
-        let tx_count = read::<u32>();
-
-        let mut txs = Vec::new();
-        for _ in 0..tx_count {
-            // txs must be inputted in such an order that
-            // their SHA256 hashes are sorted alphabetically
-            txs.push(read_vec());
-        }
+        // if active_addresses.is_empty() {
+        //     continue;
+        // }
 
         let tx_hashes: Vec<Vec<u8>> = txs.iter().map(|tx| hash(tx)).collect();
 
@@ -145,7 +148,7 @@ pub fn main() {
                 RECONSTRUCT_CYCLE_COUNT / active_addresses.len() as u32;
         }
 
-        let block = Block::abi_encode(&(block_number, tx_root, timestamp));
+        let block = Block::abi_encode(&(blockprint, block_number, tx_root, timestamp));
         blockprint.copy_from_slice(&hash(&block));
     }
 

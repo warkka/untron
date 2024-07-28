@@ -25,10 +25,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Path::new("googleapis/google"),
         Path::new("java-tron/protocol/src/main/protos/google"),
     )?;
-    tonic_build::configure().build_server(false).compile(
-        &["java-tron/protocol/src/main/protos/api/api.proto"],
-        &["java-tron/protocol/src/main/protos"],
-    )?;
+    tonic_build::configure()
+        .build_server(false)
+        .boxed("BlockExtention")
+        .compile(
+            &["java-tron/protocol/src/main/protos/api/api.proto"],
+            &["java-tron/protocol/src/main/protos"],
+        )?;
     fs::remove_dir_all("java-tron/protocol/src/main/protos/google")?;
     Ok(())
 }
