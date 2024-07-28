@@ -19,7 +19,7 @@ use crypto::*;
 // TODO: calculate it more accurately
 const RECONSTRUCT_CYCLE_COUNT: u32 = 2_000_000;
 
-const ORDER_TTL: u32 = 300; // seconds
+const ORDER_TTL: u32 = 300_000; // milliseconds
 
 type PublicValues = sol! {
     tuple(uint32,uint32,bytes32,bytes32,bytes32,bytes32,uint64,uint64,uint64)
@@ -113,7 +113,7 @@ pub fn main() {
 
         let state_copy = state.clone();
         for (address, order) in state_copy {
-            if order.timestamp > timestamp + ORDER_TTL {
+            if timestamp > order.timestamp + ORDER_TTL {
                 state.remove(&address);
                 closed_orders.insert(address, order);
                 active_addresses.remove(&address);
@@ -123,6 +123,13 @@ pub fn main() {
                 active_addresses.insert(address);
             }
         }
+
+        println!(
+            "{} {} {}",
+            state.len(),
+            active_addresses.len(),
+            closed_orders.len()
+        );
 
         // if active_addresses.is_empty() {
         //     continue;

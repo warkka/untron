@@ -85,7 +85,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     stdin.write(&0u32); // state_length
     stdin.write(&[0u8; 32]); // order_chain (old)
-    stdin.write(&0u32); // order_count
+    stdin.write(&1u32); // order_count
+    let (_, raw_data) = get_block_by_number(&mut wallet_client, start_block).await?;
+    stdin.write(&(raw_data.timestamp as u32 - 1)); // order 0: timestamp
+    stdin.write(&[0xffu8; 20]); // order 0: address
     stdin.write(&start_block); // start_block
     stdin.write(&end_block); // end_block
     stdin.write(&[0u8; 32]); // blockprint (of start_block-1)
