@@ -16,13 +16,15 @@ use crypto::*;
 // a single block will be approx RECONSTRUCT_CYCLE_COUNT * 100.
 // there's also a small overhead from lookups (comparing USDT transfers
 // to each active address) but it's somewhat negligible
-// TODO: calculate it more accurately
-const RECONSTRUCT_CYCLE_COUNT: u32 = 2_000_000;
+//
+// our napkin benchmark shows about 5k cycles per 1 tx and there's a little overhead
+// for special cases and kinda reward for the relayer
+const RECONSTRUCT_CYCLE_COUNT: u32 = 10000;
 
 const ORDER_TTL: u32 = 300_000; // milliseconds
 
 type PublicValues = sol! {
-    tuple(uint32,uint32,bytes32,bytes32,bytes32,bytes32,uint64,uint64,uint64)
+    tuple(uint32,uint32,bytes32,bytes32,bytes32,bytes32,bytes32,uint64)
 };
 
 type OrderChain = sol! {
@@ -33,15 +35,49 @@ type Block = sol! {
     tuple(bytes32,uint32,bytes32,uint32)
 };
 
-type Inflows = sol! {
-    tuple(address,uint64)[]
+type State = sol! {
+    tuple(address,uint32,uint64,(address,uint64)[])[]
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct OrderState {
     timestamp: u32,
     inflow: u64,
-    cycles_spent: u32,
+    relayer_costs: HashMap<[u8; 20], u64>,
+}
+
+fn blockprint(prev_blockprint: &[u8; 32], blocks: &[(u32, [u8; 32], u32)]) -> [u8; 32] {
+    let mut blockprint = *prev_blockprint;
+    for (block_number, tx_root, timestamp) in blocks {
+        let data = Block::abi_encode(&(blockprint, block_number, tx_root, timestamp));
+        blockprint.copy_from_slice(&hash(&data));
+    }
+    blockprint
+}
+
+fn build_state_hash(state: &HashMap<[u8; 20], OrderState>) -> [u8; 32] {
+    #[allow(clippy::type_complexity)]
+    let tupled_state: Vec<([u8; 20], u32, u64, Vec<([u8; 20], u64)>)> = state
+        .iter()
+        .map(|(address, order)| {
+            (
+                *address,
+                order.timestamp,
+                order.inflow,
+                order
+                    .relayer_costs
+                    .iter()
+                    .map(|(relayer, cost)| (*relayer, *cost))
+                    .collect::<Vec<([u8; 20], u64)>>(),
+            )
+        })
+        .collect();
+
+    let state_print = State::abi_encode(&tupled_state);
+
+    let mut state_hash = [0u8; 32];
+    state_hash.copy_from_slice(&hash(&state_print));
+    state_hash
 }
 
 pub fn main() {
@@ -49,29 +85,34 @@ pub fn main() {
     let mut closed_orders = HashMap::new();
     let mut active_addresses = HashSet::new();
 
+    let my_address = read::<[u8; 20]>();
+
     let state_length = read::<u32>();
-    let mut state_print = Vec::with_capacity((32 * state_length) as usize);
     for _ in 0..state_length {
+        let mut relayer_costs = HashMap::new();
+
         let address = read::<[u8; 20]>();
         let timestamp = read::<u32>();
         let inflow = read::<u64>();
+        let relayers_count = read::<u32>();
 
-        state_print.extend_from_slice(&address);
-        state_print.extend_from_slice(&timestamp.to_be_bytes());
-        state_print.extend_from_slice(&inflow.to_be_bytes());
+        for _ in 0..relayers_count {
+            let relayer_address = read::<[u8; 20]>();
+            let relayer_cost = read::<u64>();
+            relayer_costs.insert(relayer_address, relayer_cost);
+        }
 
         state.insert(
             address,
             OrderState {
                 timestamp,
                 inflow,
-                cycles_spent: 0,
+                relayer_costs,
             },
         );
     }
 
-    let mut old_state_hash = [0u8; 32];
-    old_state_hash.copy_from_slice(&hash(&state_print));
+    let old_state_hash = build_state_hash(&state);
 
     let mut order_chain = read::<[u8; 32]>();
     let order_count = read::<u32>();
@@ -90,7 +131,7 @@ pub fn main() {
             OrderState {
                 timestamp,
                 inflow: 0,
-                cycles_spent: 0,
+                relayer_costs: HashMap::new(),
             },
         );
     }
@@ -98,13 +139,14 @@ pub fn main() {
     let start_block = read::<u32>();
     let end_block = read::<u32>();
 
-    let mut blockprint = read::<[u8; 32]>();
+    let mut end_blockprint = read::<[u8; 32]>(); // blockprint(start_block - 1)
+    let mcycles_cost = read::<u64>(); // USDT cost per 1M cycles
 
     for block_number in start_block..=end_block {
         let timestamp = read::<u32>();
         let tx_count = read::<u32>();
 
-        let mut txs = Vec::new();
+        let mut txs = Vec::with_capacity(tx_count as usize);
         for _ in 0..tx_count {
             // txs must be inputted in such an order that
             // their SHA256 hashes are sorted alphabetically
@@ -150,53 +192,31 @@ pub fn main() {
             }
         }
 
+        let aa_count = active_addresses.len() as u64;
+
         for address in active_addresses.iter() {
-            state.get_mut(address).unwrap().cycles_spent +=
-                RECONSTRUCT_CYCLE_COUNT / active_addresses.len() as u32;
+            let order_state = state.get_mut(address).unwrap();
+            *order_state.relayer_costs.entry(my_address).or_insert(0) +=
+                RECONSTRUCT_CYCLE_COUNT as u64 * mcycles_cost / 1_000_000 / aa_count;
         }
 
-        let block = Block::abi_encode(&(blockprint, block_number, tx_root, timestamp));
-        blockprint.copy_from_slice(&hash(&block));
+        end_blockprint = blockprint(&end_blockprint, &[(block_number, tx_root, timestamp)]);
     }
 
-    let mcycles_cost = read::<u64>(); // USDT cost per 1M cycles
+    let new_state_hash = build_state_hash(&state);
+    let closed_orders_hash = build_state_hash(&closed_orders);
 
-    let mut paymaster_fine = 0u64;
-    let mut invoice = 0u64;
-
-    let mut state_print = Vec::new();
-    for (address, order) in state.iter() {
-        state_print.extend_from_slice(address);
-        state_print.extend_from_slice(&order.timestamp.to_be_bytes());
-
-        let price = order.cycles_spent as u64 * mcycles_cost / 1_000_000;
-        invoice += price;
-        paymaster_fine += price.saturating_sub(order.inflow);
-        state_print.extend_from_slice(&(order.inflow.saturating_sub(price)).to_be_bytes());
-    }
-
-    let mut new_state_hash = [0u8; 32];
-    new_state_hash.copy_from_slice(&hash(&state_print));
-
-    let mut inflows_hash = [0u8; 32];
-    let inflows = Inflows::abi_encode(
-        &closed_orders
-            .into_iter()
-            .map(|(address, value)| (address, value.inflow))
-            .collect::<Vec<([u8; 20], u64)>>(),
-    );
-    inflows_hash.copy_from_slice(&hash(&inflows));
+    println!("{:?}", &state);
 
     let public_values = PublicValues::abi_encode(&(
         start_block,
         end_block,
-        blockprint,
+        end_blockprint,
+        order_chain,
         old_state_hash,
         new_state_hash,
-        inflows_hash,
+        closed_orders_hash,
         mcycles_cost,
-        invoice,
-        paymaster_fine,
     ));
 
     commit_slice(&public_values);
