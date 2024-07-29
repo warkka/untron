@@ -197,10 +197,16 @@ pub fn main() {
         for address in active_addresses.iter() {
             let order_state = state.get_mut(address).unwrap();
             *order_state.relayer_costs.entry(my_address).or_insert(0) +=
-                RECONSTRUCT_CYCLE_COUNT as u64 * mcycles_cost / 1_000_000 / aa_count;
+                RECONSTRUCT_CYCLE_COUNT as u64 * mcycles_cost / aa_count; // WARNING: there's no division by 1m (per mcycles) bc it has to be done in the end
         }
 
         end_blockprint = blockprint(&end_blockprint, &[(block_number, tx_root, timestamp)]);
+    }
+
+    // if we did this on active_addresses.iter() it'd constantly lose precision
+    for (_, order_state) in state.iter_mut() {
+        let cost = order_state.relayer_costs.get_mut(&my_address).unwrap();
+        *cost = cost.div_ceil(1_000_000u64);
     }
 
     let new_state_hash = build_state_hash(&state);
