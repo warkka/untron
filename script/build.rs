@@ -19,7 +19,7 @@ fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> 
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    build_program("../program");
+    build_program("../circuits/revealing-dynamic");
 
     copy_dir_all(
         Path::new("googleapis/google"),
