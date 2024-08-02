@@ -2,6 +2,8 @@
 pragma solidity ^0.8.20;
 
 import {ISP1Verifier} from "@sp1-contracts/ISP1Verifier.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 interface ITronRelay {
     function latestBlock() external returns (uint32);
@@ -12,34 +14,39 @@ interface ISender {
     function send(uint64, bytes memory) external;
 }
 
-contract Untron {
-    ISP1Verifier public verifier;
-    ITronRelay public relay;
-    ISender public sender;
-    IERC20 public usdt;
-    bytes32 public vkey;
+contract Untron is Ownable {
+    IERC20 constant usdt = IERC20(0x493257fD37EDB34451f62EDf8D2a0C418852bA4C); // bridged USDT @ zksync era
 
-    constructor(ISP1Verifier _verifier, ITronRelay _relay, ISender _sender, bytes32 _vkey) {
-        verifier = _verifier;
-        relay = _relay;
-        sender = _sender;
-        vkey = _vkey;
+    constructor() Ownable(msg.sender) {}
+
+    struct Params {
+        ISP1Verifier verifier;
+        ITronRelay relay;
+        ISender sender;
+        bytes32 vkey;
+        uint64 mcyclesCost;
+        uint64 fulfillerFee;
+        address relayer;
+        uint64 relayerFee;
+        address paymaster;
+    }
+
+    Params public params;
+
+    function setParams(Params calldata _params) external onlyOwner {
+        params = _params;
     }
 
     bytes32 public stateHash = bytes32(0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855); // sha256("")
-    uint64 public mcyclesCost;
-    uint64 fulfillerFee;
-    uint64 relayerFee;
-
     uint32 public latestKnownBlock;
-    bytes32 orderChain;
-    bytes32 latestKnownOrder;
+    bytes32 public orderChain;
+    bytes32 public latestKnownOrderChain;
 
     mapping(bytes32 => uint256) public orderIndex;
-    mapping(bytes32 => bool) public pastState;
     mapping(address => Order) public orders; // tron address -> Order
     mapping(address => address) public tronAddresses; // tron address -> evm address
-    mapping(address => Buyer) public buyers; // evm address -> Buyer
+    mapping(address => Buyer) public buyers; // EVM address -> Buyer
+    mapping(address => uint256) public orderCount; // tron address -> order count
 
     struct Order {
         uint32 timestamp;
@@ -58,11 +65,6 @@ contract Untron {
         uint64 minOrderSize;
     }
 
-    struct RelayerCost {
-        address relayer;
-        uint64 cost;
-    }
-
     struct State {
         address relayer;
         uint64 totalCost;
@@ -77,7 +79,9 @@ contract Untron {
     }
 
     function revealDeposits(bytes calldata proof, bytes calldata publicValues, State calldata closedOrders) external {
-        verifier.verifyProof(vkey, publicValues, proof);
+        require(msg.sender == params.relayer || params.relayer == address(0));
+
+        params.verifier.verifyProof(params.vkey, publicValues, proof);
         (
             uint32 startBlock,
             uint32 endBlock,
@@ -91,15 +95,15 @@ contract Untron {
         ) = abi.decode(publicValues, (uint32, uint32, bytes32, bytes32, bytes32, bytes32, bytes32, bytes32, uint64));
 
         require(startBlock <= latestKnownBlock);
-        require(endBlock <= relay.latestBlock() - 19);
-        require(endBlockprint == relay.blockprint(endBlock));
+        require(endBlock <= params.relay.latestBlock() - 19);
+        require(endBlockprint == params.relay.blockprint(endBlock));
         require(orderIndex[startOrderChain] <= orderIndex[orderChain]);
-        require(orderIndex[endOrderChain] > orderIndex[latestKnownOrder]);
-        require(pastState[oldStateHash]);
-        require(_mcyclesCost <= mcyclesCost);
+        require(orderIndex[endOrderChain] > orderIndex[latestKnownOrderChain]);
+        require(oldStateHash == stateHash);
+        require(_mcyclesCost <= params.mcyclesCost);
 
         stateHash = newStateHash;
-        pastState[newStateHash] = true;
+        latestKnownOrderChain = endOrderChain;
 
         require(sha256(abi.encode(closedOrders)) == closedOrdersHash);
 
@@ -108,12 +112,12 @@ contract Untron {
             OrderState memory orderState = closedOrders.orders[i];
             Order memory order = orders[orderState.tronAddress];
 
-            uint256 amount = orderState.inflow;
-            uint256 costOverdraft = orderState.relayCost - amount;
+            uint64 amount = orderState.inflow;
+            uint64 costOverdraft = orderState.relayCost - amount;
             amount -= orderState.relayCost;
             amount -= order.relayerFee;
             amount = amount > order.amount ? order.amount : amount;
-            uint256 surplus = order.amount - amount;
+            uint64 surplus = order.amount - amount;
 
             if (costOverdraft != 0) {
                 paymasterFine += costOverdraft;
@@ -126,5 +130,14 @@ contract Untron {
             buyers[tronAddresses[orderState.tronAddress]].liquidity += surplus;
             delete orders[orderState.tronAddress];
         }
+
+        // no "require"
+        usdt.transferFrom(params.paymaster, address(this), paymasterFine);
+        usdt.transfer(closedOrders.relayer, closedOrders.totalCost);
+    }
+
+    function jailbreak() external {
+        require(params.relay.latestBlock() > latestKnownBlock + 300); // 15 minutes
+        params.relayer = address(0);
     }
 }
