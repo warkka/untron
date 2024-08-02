@@ -11,16 +11,6 @@ use sp1_zkvm::io::*;
 
 use crypto::*;
 
-// the cycle count of reconstructing and revealing the tx from the tx root
-// e.g. if there are 100 txs in the block, the cycle count of processing
-// a single block will be approx RECONSTRUCT_CYCLE_COUNT * 100.
-// there's also a small overhead from lookups (comparing USDT transfers
-// to each active address) but it's somewhat negligible
-//
-// our napkin benchmark shows about 5k cycles per 1 tx and there's a little overhead
-// for special cases and kinda reward for the relayer
-const RECONSTRUCT_CYCLE_COUNT: u64 = 10000;
-
 const ORDER_TTL: u32 = 100; // blocks
 const BLOCK_TIME: u32 = 3000; // milliseconds
 
@@ -37,13 +27,13 @@ type Block = sol! {
 };
 
 type EncodedState = sol! {
-    tuple(address,uint64,(address,uint32,uint64,uint64)[])
+    tuple(address,uint64,(address,uint32,uint64)[])
 };
 
 #[derive(Debug)]
 struct State {
-    address: [u8; 20],
-    total_cost: u64,
+    relayer: [u8; 20],
+    invoice: u64,
     orders: HashMap<[u8; 20], OrderState>,
 }
 
@@ -51,7 +41,6 @@ struct State {
 struct OrderState {
     timestamp: u32,
     inflow: u64,
-    relay_cost: u64,
 }
 
 fn blockprint(prev_blockprint: &[u8; 32], blocks: &[(u32, [u8; 32], u32)]) -> [u8; 32] {
@@ -65,13 +54,13 @@ fn blockprint(prev_blockprint: &[u8; 32], blocks: &[(u32, [u8; 32], u32)]) -> [u
 
 fn build_state_hash(state: &State) -> [u8; 32] {
     #[allow(clippy::type_complexity)]
-    let tupled_state: Vec<([u8; 20], u32, u64, u64)> = state
+    let tupled_state: Vec<([u8; 20], u32, u64)> = state
         .orders
         .iter()
-        .map(|(address, order)| (*address, order.timestamp, order.inflow, order.relay_cost))
+        .map(|(address, order)| (*address, order.timestamp, order.inflow))
         .collect();
 
-    let state_print = EncodedState::abi_encode(&(state.address, state.total_cost, tupled_state));
+    let state_print = EncodedState::abi_encode(&(state.relayer, state.invoice, tupled_state));
 
     let mut state_hash = [0u8; 32];
     state_hash.copy_from_slice(&hash(&state_print));
@@ -85,34 +74,26 @@ pub fn main() {
         let address = read::<[u8; 20]>();
         let timestamp = read::<u32>();
         let inflow = read::<u64>();
-        let relay_cost = read::<u64>();
 
-        old_orders.insert(
-            address,
-            OrderState {
-                timestamp,
-                inflow,
-                relay_cost,
-            },
-        );
+        old_orders.insert(address, OrderState { timestamp, inflow });
     }
 
     let old_state = State {
-        address: read::<[u8; 20]>(),
-        total_cost: read::<u64>(),
+        relayer: read::<[u8; 20]>(),
+        invoice: read::<u64>(),
         orders: old_orders,
     };
 
     let old_state_hash = build_state_hash(&old_state);
 
     let mut state = State {
-        address: read::<[u8; 20]>(),
-        total_cost: 0,
+        relayer: read::<[u8; 20]>(),
+        invoice: 0,
         orders: old_state.orders,
     };
     let mut closed_orders = State {
-        address: old_state.address,
-        total_cost: old_state.total_cost,
+        relayer: old_state.relayer,
+        invoice: old_state.invoice,
         orders: HashMap::new(),
     };
 
@@ -134,7 +115,6 @@ pub fn main() {
             OrderState {
                 timestamp,
                 inflow: 0,
-                relay_cost: 0,
             },
         );
     }
@@ -145,8 +125,8 @@ pub fn main() {
 
     assert!(end_block - start_block + 1 > ORDER_TTL); // so that we don't have >1 queued relayers
 
-    let mcycles_cost = read::<u64>(); // USDT cost per 1M cycles
-    let cost_per_tx = RECONSTRUCT_CYCLE_COUNT * mcycles_cost; // WARNING: div by 1m is not applied
+    let mut total_fee = 0u64;
+    let fee_per_block = read::<u64>();
 
     let mut active_addresses = HashSet::new();
     for block_number in start_block..=end_block {
@@ -173,16 +153,9 @@ pub fn main() {
             }
         }
 
-        println!(
-            "{} {} {}",
-            state.orders.len(),
-            active_addresses.len(),
-            closed_orders.orders.len()
-        );
-
-        // if active_addresses.is_empty() {
-        //     continue;
-        // }
+        if active_addresses.is_empty() {
+            continue;
+        }
 
         let tx_hashes: Vec<Vec<u8>> = txs.iter().map(|tx| hash(tx)).collect();
 
@@ -199,16 +172,7 @@ pub fn main() {
             }
         }
 
-        let aa_count = active_addresses.len() as u64;
-
-        let cost_per_block = cost_per_tx * txs.len() as u64 / 1_000_000u64;
-        let cost_per_address = cost_per_block.div_ceil(aa_count);
-        state.total_cost += cost_per_address * aa_count;
-
-        for address in active_addresses.iter() {
-            let order_state = state.orders.get_mut(address).unwrap();
-            order_state.relay_cost += cost_per_address;
-        }
+        total_fee += fee_per_block * active_addresses.len() as u64;
 
         end_blockprint = blockprint(&end_blockprint, &[(block_number, tx_root, timestamp)]);
     }
@@ -227,7 +191,7 @@ pub fn main() {
         old_state_hash,
         new_state_hash,
         closed_orders_hash,
-        mcycles_cost,
+        total_fee,
     ));
 
     commit_slice(&public_values);

@@ -1,6 +1,6 @@
 {
     "rust-analyzer.linkedProjects": [
-        "circuits/revealing/Cargo.toml",
+        "revealing-circuit/Cargo.toml",
         "script/Cargo.toml"
     ],
     "rust-analyzer.check.overrideCommand": [
