@@ -1,7 +1,7 @@
 [workspace]
 [package]
 version = "0.1.0"
-name = "revealing-circuit-dynamic"
+name = "revealing-circuit"
 edition = "2021"
 
 [dependencies]
