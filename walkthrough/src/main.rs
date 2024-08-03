@@ -19,7 +19,7 @@ type PublicValues = sol! {
 };
 
 type OrderChain = sol! {
-    tuple(bytes32,uint32,address)
+    tuple(bytes32,uint32,address,uint64)
 };
 
 type EncodedState = sol! {
@@ -37,10 +37,10 @@ struct State {
 struct OrderState {
     timestamp: u32,
     inflow: u64,
+    min_deposit: u64,
 }
 
 fn build_state_hash(state: &State) -> [u8; 32] {
-    #[allow(clippy::type_complexity)]
     let tupled_state: Vec<([u8; 20], u32, u64)> = state
         .orders
         .iter()
@@ -58,8 +58,16 @@ pub fn main() {
         let address = read::<[u8; 20]>();
         let timestamp = read::<u32>();
         let inflow = read::<u64>();
+        let min_deposit = read::<u64>();
 
-        old_orders.insert(address, OrderState { timestamp, inflow });
+        old_orders.insert(
+            address,
+            OrderState {
+                timestamp,
+                inflow,
+                min_deposit,
+            },
+        );
     }
 
     let old_state = State {
@@ -91,8 +99,9 @@ pub fn main() {
 
         let timestamp = read::<u32>();
         let address = read::<[u8; 20]>();
+        let min_deposit = read::<u64>();
 
-        let order = OrderChain::abi_encode(&(end_order_chain, timestamp, address));
+        let order = OrderChain::abi_encode(&(end_order_chain, timestamp, address, min_deposit));
         end_order_chain = zktron::hash(&order);
 
         state.orders.insert(
@@ -100,6 +109,7 @@ pub fn main() {
             OrderState {
                 timestamp,
                 inflow: 0,
+                min_deposit,
             },
         );
     }
@@ -155,7 +165,9 @@ pub fn main() {
                 continue;
             };
 
-            if active_addresses.contains(&transfer.to) {
+            if active_addresses.contains(&transfer.to)
+                && transfer.value >= state.orders.get(&transfer.to).unwrap().min_deposit
+            {
                 state.orders.get_mut(&transfer.to).unwrap().inflow += transfer.value;
             }
         }
