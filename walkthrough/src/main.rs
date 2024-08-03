@@ -15,7 +15,7 @@ const ORDER_TTL: u32 = 100; // blocks
 const BLOCK_TIME: u32 = 3000; // milliseconds
 
 type PublicValues = sol! {
-    tuple(bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,uint64)
+    tuple(bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,uint64,uint64)
 };
 
 type OrderChain = sol! {
@@ -191,6 +191,7 @@ pub fn main() {
         new_state_hash,
         closed_orders_hash,
         fee_per_block,
+        total_fee,
     ));
 
     commit_slice(&public_values);
