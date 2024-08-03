@@ -190,7 +190,7 @@ pub fn main() {
         old_state_hash,
         new_state_hash,
         closed_orders_hash,
-        total_fee,
+        fee_per_block,
     ));
 
     commit_slice(&public_values);
