@@ -15,7 +15,7 @@ const ORDER_TTL: u32 = 100; // blocks
 const BLOCK_TIME: u32 = 3000; // milliseconds
 
 type PublicValues = sol! {
-    tuple(bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,uint64,uint64)
+    tuple(address,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,uint64,uint64)
 };
 
 type OrderChain = sol! {
@@ -23,15 +23,8 @@ type OrderChain = sol! {
 };
 
 type EncodedState = sol! {
-    tuple(address,uint64,(address,uint32,uint64)[])
+    tuple(address,uint32,uint64,uint64)[]
 };
-
-#[derive(Debug)]
-struct State {
-    relayer: [u8; 20],
-    invoice: u64,
-    orders: HashMap<[u8; 20], OrderState>,
-}
 
 #[derive(Clone, Debug)]
 struct OrderState {
@@ -40,27 +33,26 @@ struct OrderState {
     min_deposit: u64,
 }
 
-fn build_state_hash(state: &State) -> [u8; 32] {
-    let tupled_state: Vec<([u8; 20], u32, u64)> = state
-        .orders
+fn build_state_hash(state: &HashMap<[u8; 20], OrderState>) -> [u8; 32] {
+    let tupled_state: Vec<([u8; 20], u32, u64, u64)> = state
         .iter()
-        .map(|(address, order)| (*address, order.timestamp, order.inflow))
+        .map(|(address, order)| (*address, order.timestamp, order.inflow, order.min_deposit))
         .collect();
 
-    let state_print = EncodedState::abi_encode(&(state.relayer, state.invoice, tupled_state));
+    let state_print = EncodedState::abi_encode(&tupled_state);
     zktron::hash(&state_print)
 }
 
 pub fn main() {
-    let mut old_orders = HashMap::new();
-    let old_orders_length = read::<u32>();
-    for _ in 0..old_orders_length {
+    let mut state = HashMap::new();
+    let state_length = read::<u32>();
+    for _ in 0..state_length {
         let address = read::<[u8; 20]>();
         let timestamp = read::<u32>();
         let inflow = read::<u64>();
         let min_deposit = read::<u64>();
 
-        old_orders.insert(
+        state.insert(
             address,
             OrderState {
                 timestamp,
@@ -70,24 +62,9 @@ pub fn main() {
         );
     }
 
-    let old_state = State {
-        relayer: read::<[u8; 20]>(),
-        invoice: read::<u64>(),
-        orders: old_orders,
-    };
+    let me = read::<[u8; 20]>();
 
-    let old_state_hash = build_state_hash(&old_state);
-
-    let mut state = State {
-        relayer: read::<[u8; 20]>(),
-        invoice: 0,
-        orders: old_state.orders,
-    };
-    let mut closed_orders = State {
-        relayer: old_state.relayer,
-        invoice: old_state.invoice,
-        orders: HashMap::new(),
-    };
+    let old_state_hash = build_state_hash(&state);
 
     let start_order_chain = read::<[u8; 32]>();
     let mut end_order_chain = start_order_chain;
@@ -104,7 +81,7 @@ pub fn main() {
         let order = OrderChain::abi_encode(&(end_order_chain, timestamp, address, min_deposit));
         end_order_chain = zktron::hash(&order);
 
-        state.orders.insert(
+        state.insert(
             address,
             OrderState {
                 timestamp,
@@ -123,6 +100,7 @@ pub fn main() {
     let mut total_fee = 0u64;
     let fee_per_block = read::<u64>();
 
+    let mut closed_orders = HashMap::new();
     let mut active_addresses = HashSet::new();
     for _ in 0..block_count {
         let block_raw_data = read_vec();
@@ -138,11 +116,11 @@ pub fn main() {
             txs.push(read_vec());
         }
 
-        let orders_copy = state.orders.clone();
+        let orders_copy = state.clone();
         for (address, order) in orders_copy {
             if block.timestamp > order.timestamp + ORDER_TTL * BLOCK_TIME {
-                state.orders.remove(&address);
-                closed_orders.orders.insert(address, order);
+                state.remove(&address);
+                closed_orders.insert(address, order);
                 active_addresses.remove(&address);
             } else if block.timestamp < order.timestamp {
                 continue;
@@ -166,9 +144,9 @@ pub fn main() {
             };
 
             if active_addresses.contains(&transfer.to)
-                && transfer.value >= state.orders.get(&transfer.to).unwrap().min_deposit
+                && transfer.value >= state.get(&transfer.to).unwrap().min_deposit
             {
-                state.orders.get_mut(&transfer.to).unwrap().inflow += transfer.value;
+                state.get_mut(&transfer.to).unwrap().inflow += transfer.value;
             }
         }
 
@@ -183,6 +161,7 @@ pub fn main() {
     println!("{:?}", &state);
 
     let public_values = PublicValues::abi_encode(&(
+        me,
         start_block,
         end_block,
         start_order_chain,
