@@ -1,25 +1,9 @@
 use hex_literal::hex;
+use zktron::read_varint;
 
 pub struct UsdtTransfer {
     pub to: [u8; 20],
     pub value: u64,
-}
-
-fn read_varint(arr: &[u8]) -> (usize, usize) {
-    let mut shift = 0usize;
-    let mut result = 0;
-    let mut offset = 0;
-    loop {
-        let i = arr[offset];
-        result |= ((i & 0x7f) as usize) << shift;
-        shift += 7;
-        if i & 0x80 == 0 {
-            break;
-        }
-        offset += 1;
-    }
-
-    (result, offset + 1)
 }
 
 // assert_eq but None instead of panic

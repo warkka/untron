@@ -1,21 +1,13 @@
-use sha2::{Digest, Sha256};
-
-pub fn hash(data: &[u8]) -> Vec<u8> {
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    hasher.finalize().to_vec()
-}
-
-fn combine_hashes(left: &[u8], right: &[u8]) -> Vec<u8> {
-    let mut combined = Vec::new();
+fn combine_hashes(left: &[u8], right: &[u8]) -> [u8; 32] {
+    let mut combined = Vec::with_capacity(64);
     combined.extend_from_slice(left);
     combined.extend_from_slice(right);
-    hash(&combined)
+    zktron::hash(&combined)
 }
 
-pub fn create_merkle_tree(leaves: &[Vec<u8>]) -> Vec<u8> {
+pub fn create_merkle_tree(leaves: &[[u8; 32]]) -> [u8; 32] {
     if leaves.is_empty() {
-        return Vec::new();
+        return [0u8; 32];
     }
 
     let mut current_level = leaves.to_vec();
@@ -27,12 +19,12 @@ pub fn create_merkle_tree(leaves: &[Vec<u8>]) -> Vec<u8> {
             if chunk.len() == 2 {
                 next_level.push(combine_hashes(&chunk[0], &chunk[1]));
             } else {
-                next_level.push(chunk[0].clone());
+                next_level.push(chunk[0]);
             }
         }
 
         current_level = next_level;
     }
 
-    current_level[0].clone()
+    current_level[0]
 }

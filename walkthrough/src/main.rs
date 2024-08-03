@@ -15,15 +15,11 @@ const ORDER_TTL: u32 = 100; // blocks
 const BLOCK_TIME: u32 = 3000; // milliseconds
 
 type PublicValues = sol! {
-    tuple(uint32,uint32,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,uint64)
+    tuple(bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,uint64)
 };
 
 type OrderChain = sol! {
     tuple(bytes32,uint32,address)
-};
-
-type Block = sol! {
-    tuple(bytes32,uint32,bytes32,uint32)
 };
 
 type EncodedState = sol! {
@@ -43,15 +39,6 @@ struct OrderState {
     inflow: u64,
 }
 
-fn blockprint(prev_blockprint: &[u8; 32], blocks: &[(u32, [u8; 32], u32)]) -> [u8; 32] {
-    let mut blockprint = *prev_blockprint;
-    for (block_number, tx_root, timestamp) in blocks {
-        let data = Block::abi_encode(&(blockprint, block_number, tx_root, timestamp));
-        blockprint.copy_from_slice(&hash(&data));
-    }
-    blockprint
-}
-
 fn build_state_hash(state: &State) -> [u8; 32] {
     #[allow(clippy::type_complexity)]
     let tupled_state: Vec<([u8; 20], u32, u64)> = state
@@ -61,10 +48,7 @@ fn build_state_hash(state: &State) -> [u8; 32] {
         .collect();
 
     let state_print = EncodedState::abi_encode(&(state.relayer, state.invoice, tupled_state));
-
-    let mut state_hash = [0u8; 32];
-    state_hash.copy_from_slice(&hash(&state_print));
-    state_hash
+    zktron::hash(&state_print)
 }
 
 pub fn main() {
@@ -100,6 +84,7 @@ pub fn main() {
     let start_order_chain = read::<[u8; 32]>();
     let mut end_order_chain = start_order_chain;
     let order_count = read::<u32>();
+
     for _ in 0..order_count {
         let mut element = Vec::with_capacity(32 * 3);
         element.extend_from_slice(&end_order_chain);
@@ -108,7 +93,7 @@ pub fn main() {
         let address = read::<[u8; 20]>();
 
         let order = OrderChain::abi_encode(&(end_order_chain, timestamp, address));
-        end_order_chain.copy_from_slice(&hash(&order));
+        end_order_chain = zktron::hash(&order);
 
         state.orders.insert(
             address,
@@ -119,18 +104,21 @@ pub fn main() {
         );
     }
 
-    let start_block = read::<u32>();
-    let end_block = read::<u32>();
-    let mut end_blockprint = read::<[u8; 32]>(); // blockprint(start_block - 1)
+    let start_block = read::<[u8; 32]>();
+    let mut end_block = start_block;
 
-    assert!(end_block - start_block + 1 > ORDER_TTL); // so that we don't have >1 queued relayers
+    let block_count = read::<u32>();
+    assert!(block_count > ORDER_TTL); // so that we don't have >1 queued relayers
 
     let mut total_fee = 0u64;
     let fee_per_block = read::<u64>();
 
     let mut active_addresses = HashSet::new();
-    for block_number in start_block..=end_block {
-        let timestamp = read::<u32>();
+    for _ in 0..block_count {
+        let block_raw_data = read_vec();
+        let block =
+            zktron::parse_block_header(end_block, &block_raw_data, zktron::hash(&block_raw_data));
+
         let tx_count = read::<u32>();
 
         let mut txs = Vec::with_capacity(tx_count as usize);
@@ -142,11 +130,11 @@ pub fn main() {
 
         let orders_copy = state.orders.clone();
         for (address, order) in orders_copy {
-            if timestamp > order.timestamp + ORDER_TTL * BLOCK_TIME {
+            if block.timestamp > order.timestamp + ORDER_TTL * BLOCK_TIME {
                 state.orders.remove(&address);
                 closed_orders.orders.insert(address, order);
                 active_addresses.remove(&address);
-            } else if timestamp < order.timestamp {
+            } else if block.timestamp < order.timestamp {
                 continue;
             } else {
                 active_addresses.insert(address);
@@ -157,7 +145,7 @@ pub fn main() {
             continue;
         }
 
-        let tx_hashes: Vec<Vec<u8>> = txs.iter().map(|tx| hash(tx)).collect();
+        let tx_hashes: Vec<[u8; 32]> = txs.iter().map(|tx| zktron::hash(tx)).collect();
 
         let mut tx_root = [0u8; 32];
         tx_root.copy_from_slice(&create_merkle_tree(&tx_hashes));
@@ -174,7 +162,7 @@ pub fn main() {
 
         total_fee += fee_per_block * active_addresses.len() as u64;
 
-        end_blockprint = blockprint(&end_blockprint, &[(block_number, tx_root, timestamp)]);
+        end_block = block.new_block_id;
     }
 
     let new_state_hash = build_state_hash(&state);
@@ -185,7 +173,6 @@ pub fn main() {
     let public_values = PublicValues::abi_encode(&(
         start_block,
         end_block,
-        end_blockprint,
         start_order_chain,
         end_order_chain,
         old_state_hash,
