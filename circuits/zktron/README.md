@@ -1,6 +1,6 @@
-# Untron.finance: Revealing Circuit
+# Untron.finance: ZK light client for Tron Network
 
-This directory contains the "revealing circuit" written in SP1 zkVM. Revealing circuit accepts Tron blockchain and order data from the smart contract and looks for valid deposits against the tx roots of these blocks.
+This directory contains the ZK light client for Tron Network ("ZKTron") written in SP1 zkVM. ZKTron verifies and parses block headers and returns data necessary for Untron bridge. It's capable of ZK proving large chains of blocks in Tron in a short time, making it useful in the hours of low activity in the bridge.
 
 ## Making a reproducible build
 

@@ -1,6 +1,6 @@
-# Testing ground for revealing circuit
+# Testing ground for circuits
 
-**Warning:** to make a reproducible build, go to [program](https://github.com/ultrasoundlabs/untron/blob/main/program) instead. This script is for testing the revealing circuit
+**Warning:** to make reproducible builds, go to the respecitve crates instead. This script is for testing the circuits
 
 ## Running
 

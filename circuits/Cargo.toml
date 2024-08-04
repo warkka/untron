@@ -2,4 +2,5 @@
 members = [
     "zktron",
     "walkthrough",
+    "script"
 ]

@@ -1,7 +1,6 @@
-[workspace]
 [package]
 version = "0.1.0"
-name = "untron-circuit"
+name = "untron-circuits"
 edition = "2021"
 
 [dependencies]
