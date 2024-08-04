@@ -1,9 +1,6 @@
 {
     "rust-analyzer.linkedProjects": [
-        "revealing-circuit/Cargo.toml",
-        "zktron/Cargo.toml",
-        "script/Cargo.toml",
-        "Cargo.toml"
+        "circuits/Cargo.toml"
     ],
     "rust-analyzer.check.overrideCommand": [
         "cargo",
