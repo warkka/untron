@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {ISP1Verifier} from "@sp1-contracts/ISP1Verifier.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 interface ITronRelay {
     function latestBlock() external returns (bytes32);
@@ -27,10 +28,14 @@ contract Untron is Ownable {
         ITronRelay relay;
         ISender sender;
         bytes32 vkey;
-        uint64 feePerBlock;
         address relayer;
         address paymaster;
+        uint64 minSize;
+        uint64 feePerBlock;
         uint64 revealerFee;
+        uint64 fulfillerFee;
+        uint256 rateLimit;
+        uint256 limitPer;
     }
 
     Params public params;
@@ -55,28 +60,123 @@ contract Untron is Ownable {
     struct Order {
         uint64 size;
         uint64 rate;
-        ISender sender;
         bytes transferData;
         address fulfiller;
         uint64 fulfilledAmount;
-        uint64 fulfillerFee;
     }
 
     struct Buyer {
-        address _address;
+        bool active;
         uint64 liquidity;
-        uint64 order;
+        uint64 rate;
         uint64 minDeposit;
     }
 
-    struct OrderState {
+    struct ClosedOrder {
         address tronAddress;
         uint32 timestamp;
         uint64 inflow;
+        uint64 minDeposit; // needed for reverse swaps
+    }
+
+    struct OrderChain {
+        bytes32 prev;
+        uint32 timestamp;
+        address tronAddress;
         uint64 minDeposit;
     }
 
-    function revealDeposits(bytes calldata proof, bytes calldata publicValues, OrderState[] calldata closedOrders)
+    function setBuyer(uint64 liquidity, uint64 rate, uint64 minDeposit) external {
+        require(usdt.transferFrom(msg.sender, address(this), liquidity));
+
+        buyers[msg.sender].active = true;
+        buyers[msg.sender].liquidity += liquidity;
+        buyers[msg.sender].rate = rate;
+        buyers[msg.sender].minDeposit = minDeposit;
+    }
+
+    function closeBuyer() external {
+        require(usdt.transfer(msg.sender, buyers[msg.sender].liquidity));
+
+        delete buyers[msg.sender];
+    }
+
+    mapping(address => uint256[]) userActions; // address -> timestamps of actions
+    // wtf is happening:
+    // this is an inverse flag for whether the user has
+    // an active order. when they have, it must be false,
+    // and vice versa. by default, all users are "busy"
+    // unless they register so this is set to true.
+    // this was made to save storage slots.
+    mapping(address => bool) internal _isBusy;
+
+    function isBusy(address who) internal view returns (bool) {
+        return !_isBusy[who];
+    }
+
+    function register(bytes calldata paymasterSig) external {
+        require(ECDSA.recover(bytes32(uint256(uint160(msg.sender))), paymasterSig) == params.paymaster);
+        require(userActions[msg.sender].length == 0);
+        _isBusy[msg.sender] = true; // see: inverse flag "_isBusy"
+    }
+
+    function createOrder(address tronAddress, uint64 size, bytes calldata transferData) external {
+        require(!isBusy(msg.sender), "bs");
+        require(
+            userActions[msg.sender][userActions[msg.sender].length - params.rateLimit] + params.limitPer
+                < block.timestamp,
+            "rl"
+        );
+        require(size >= params.minSize);
+        require(orders[tronAddress].size == 0);
+
+        address buyer = tronAddresses[tronAddress];
+        require(buyers[buyer].active);
+        require(buyers[buyer].liquidity >= size);
+        buyers[buyer].liquidity -= size;
+
+        orders[tronAddress] = Order({
+            size: size,
+            rate: buyers[buyer].rate,
+            transferData: transferData,
+            fulfiller: address(0),
+            fulfilledAmount: 0
+        });
+
+        latestOrder = sha256(
+            abi.encode(
+                OrderChain({
+                    prev: latestOrder,
+                    timestamp: unixToTron(block.timestamp),
+                    tronAddress: tronAddress,
+                    minDeposit: buyers[buyer].minDeposit
+                })
+            )
+        );
+        totalOrders++;
+
+        userActions[msg.sender].push(block.timestamp);
+        _isBusy[msg.sender] = false; // see: inverse flag "_isBusy"
+    }
+
+    function fulfill(address[] calldata _tronAddresses, uint64[] calldata amounts) external {
+        for (uint256 i = 0; i < _tronAddresses.length; i++) {
+            address tronAddress = _tronAddresses[i];
+
+            if (orders[tronAddress].fulfilledAmount != 0) {
+                continue; // not require bc someone could fulfill ahead of them
+            }
+
+            uint64 amount = amounts[i];
+            require(usdt.transferFrom(msg.sender, address(this), amount));
+
+            params.sender.send(amount, orders[tronAddress].transferData);
+            orders[tronAddress].fulfiller = msg.sender;
+            orders[tronAddress].fulfilledAmount = amount;
+        }
+    }
+
+    function revealDeposits(bytes calldata proof, bytes calldata publicValues, ClosedOrder[] calldata closedOrders)
         external
     {
         require(msg.sender == params.relayer || params.relayer == address(0));
@@ -112,7 +212,7 @@ contract Untron is Ownable {
 
         uint64 paymasterFine = 0;
         for (uint256 i = 0; i < closedOrders.length; i++) {
-            OrderState memory state = closedOrders[i];
+            ClosedOrder memory state = closedOrders[i];
             Order memory order = orders[state.tronAddress];
 
             uint64 amount = order.size < state.inflow ? order.size : state.inflow;
@@ -124,10 +224,10 @@ contract Untron is Ownable {
             buyers[tronAddresses[state.tronAddress]].liquidity += left;
 
             paymasterFine += _paymasterFine;
-            if (order.fulfilledAmount == amount) {
+            if (order.fulfilledAmount + params.fulfillerFee == amount) {
                 require(usdt.transfer(order.fulfiller, amount));
             } else {
-                order.sender.send(amount, order.transferData);
+                params.sender.send(amount, order.transferData);
             }
         }
         totalFee += params.revealerFee * uint64(closedOrders.length);
@@ -137,6 +237,16 @@ contract Untron is Ownable {
 
     function blockIdToNumber(bytes32 blockId) internal pure returns (uint256) {
         return uint256(blockId) >> 192;
+    }
+
+    // tron uses god knows what format for timestamping
+    // and this formula is an approximation.
+    // i only figured out that it's in 1/100th of second
+    // because timestamps in blocks differ by 300.
+    // CALCULATION FOR THE SUBTRAHEND:
+    // blockheader(62913164).raw_data.timestamp - (tronscan(62913164).timestamp * 100)
+    function unixToTron(uint256 timestamp) internal pure returns (uint32) {
+        return uint32(timestamp * 100 - 170539755000);
     }
 
     function jailbreak() external {
