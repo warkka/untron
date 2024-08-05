@@ -44,7 +44,7 @@ contract Untron is Ownable {
     bytes32 public latestOrder;
     uint256 public totalOrders;
 
-    mapping(bytes32 => uint32) public orderCreation; // order chained hash -> tron block
+    mapping(bytes32 => bool) public orderExists; // order chained hash -> bool
     mapping(address => Order) public orders; // tron address -> Order
     mapping(address => address) public tronAddresses; // tron address -> evm address
     mapping(address => Buyer) public buyers; // EVM address -> Buyer
@@ -149,6 +149,7 @@ contract Untron is Ownable {
         totalOrders++;
 
         userActions[msg.sender].push(block.timestamp);
+        orderExists[latestOrder] = true;
         _isBusy[msg.sender] = false; // see: inverse flag "_isBusy"
     }
 
@@ -197,7 +198,7 @@ contract Untron is Ownable {
         require(params.relay.blocks(endBlockNumber) == endBlock);
         require(endBlockNumber < params.relay.latestBlock() - 18);
         require(startOrder == latestKnownOrder);
-        require(orderCreation[endOrder] > totalOrders);
+        require(orderExists[endOrder]);
         require(oldStateHash == stateHash);
         require(_feePerBlock == params.feePerBlock);
 
