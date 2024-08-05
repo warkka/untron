@@ -5,12 +5,8 @@ import {ISP1Verifier} from "@sp1-contracts/ISP1Verifier.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-
-interface ITronRelay {
-    function latestBlock() external returns (bytes32);
-    function blockExists(bytes32) external returns (bool);
-    function timestamp(bytes32) external returns (uint32);
-}
+import "./TronRelay.sol";
+import "./Tronlib.sol";
 
 interface ISender {
     function send(uint64, bytes memory) external;
@@ -147,7 +143,7 @@ contract Untron is Ownable {
             abi.encode(
                 OrderChain({
                     prev: latestOrder,
-                    timestamp: unixToTron(block.timestamp),
+                    timestamp: Tronlib.unixToTron(block.timestamp),
                     tronAddress: tronAddress,
                     minDeposit: buyers[buyer].minDeposit
                 })
@@ -199,7 +195,10 @@ contract Untron is Ownable {
 
         require(msg.sender == relayer);
         require(startBlock == latestKnownBlock);
-        require(params.relay.blockExists(endBlock));
+
+        uint256 endBlockNumber = Tronlib.blockIdToNumber(endBlock);
+        require(params.relay.blocks(endBlockNumber) == endBlock);
+        require(endBlockNumber < params.relay.latestBlock() - 18);
         require(startOrder == latestKnownOrder);
         require(orderCreation[endOrder] > totalOrders);
         require(oldStateHash == stateHash);
@@ -235,22 +234,8 @@ contract Untron is Ownable {
         require(usdt.transfer(msg.sender, totalFee));
     }
 
-    function blockIdToNumber(bytes32 blockId) internal pure returns (uint256) {
-        return uint256(blockId) >> 192;
-    }
-
-    // tron uses god knows what format for timestamping
-    // and this formula is an approximation.
-    // i only figured out that it's in 1/100th of second
-    // because timestamps in blocks differ by 300.
-    // CALCULATION FOR THE SUBTRAHEND:
-    // blockheader(62913164).raw_data.timestamp - (tronscan(62913164).timestamp * 100)
-    function unixToTron(uint256 timestamp) internal pure returns (uint32) {
-        return uint32(timestamp * 100 - 170539755000);
-    }
-
     function jailbreak() external {
-        require(blockIdToNumber(params.relay.latestBlock()) > blockIdToNumber(latestKnownBlock) + 600); // 30 minutes
+        require(params.relay.latestBlock() > Tronlib.blockIdToNumber(latestKnownBlock) + 600); // 30 minutes
         params.relayer = address(0);
     }
 }
