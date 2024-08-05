@@ -5,12 +5,9 @@ import {ISP1Verifier} from "@sp1-contracts/ISP1Verifier.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "./TronRelay.sol";
+import "./interfaces/ITronRelay.sol";
+import "./interfaces/ISender.sol";
 import "./Tronlib.sol";
-
-interface ISender {
-    function send(uint64, bytes memory) external;
-}
 
 contract Untron is Ownable {
     IERC20 constant usdt = IERC20(0x493257fD37EDB34451f62EDf8D2a0C418852bA4C); // bridged USDT @ zksync era

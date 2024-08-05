@@ -3,12 +3,8 @@ pragma solidity ^0.8.20;
 
 import {ISP1Verifier} from "@sp1-contracts/ISP1Verifier.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "./interfaces/ITronRelay.sol";
 import "./Tronlib.sol";
-
-interface ITronRelay {
-    function latestBlock() external returns (uint256);
-    function blocks(uint256) external returns (bytes32);
-}
 
 contract TronRelay is ITronRelay, Ownable {
     ISP1Verifier constant verifier = ISP1Verifier(address(0)); // TODO: change
