@@ -46,13 +46,14 @@ contract Untron is Ownable {
 
     mapping(bytes32 => bool) public orderExists; // order chained hash -> bool
     mapping(address => Order) public orders; // tron address -> Order
-    mapping(address => address) public tronAddresses; // tron address -> evm address
+    mapping(address => address) public evmAddresses; // tron address -> evm address
     mapping(address => Buyer) public buyers; // EVM address -> Buyer
     mapping(address => uint256) public orderCount; // tron address -> order count
 
     struct Order {
         uint64 size;
         uint64 rate;
+        address creator;
         bytes transferData;
         address fulfiller;
         uint64 fulfilledAmount;
@@ -95,26 +96,25 @@ contract Untron is Ownable {
     }
 
     mapping(address => uint256[]) userActions; // address -> timestamps of actions
-    // wtf is happening:
-    // this is an inverse flag for whether the user has
-    // an active order. when they have, it must be false,
-    // and vice versa. by default, all users are "busy"
-    // unless they register so this is set to true.
-    // this was made to save storage slots.
-    mapping(address => bool) internal _isBusy;
+    // checks whether the user can
+    // create an order. when they can't, it must be false,
+    // and vice versa. by default, all users can't
+    // unless they register and this is set to true.
+    // this is made like this to save storage slots.
+    mapping(address => bool) internal _canCreateOrder;
 
-    function isBusy(address who) internal view returns (bool) {
-        return !_isBusy[who];
+    function canCreateOrder(address who) internal view returns (bool) {
+        return _canCreateOrder[who];
     }
 
     function register(bytes calldata paymasterSig) external {
         require(ECDSA.recover(bytes32(uint256(uint160(msg.sender))), paymasterSig) == params.paymaster);
         require(userActions[msg.sender].length == 0);
-        _isBusy[msg.sender] = true; // see: inverse flag "_isBusy"
+        _canCreateOrder[msg.sender] = true;
     }
 
     function createOrder(address tronAddress, uint64 size, bytes calldata transferData) external {
-        require(!isBusy(msg.sender), "bs");
+        require(canCreateOrder(msg.sender), "bs");
         require(
             userActions[msg.sender][userActions[msg.sender].length - params.rateLimit] + params.limitPer
                 < block.timestamp,
@@ -123,7 +123,7 @@ contract Untron is Ownable {
         require(size >= params.minSize);
         require(orders[tronAddress].size == 0);
 
-        address buyer = tronAddresses[tronAddress];
+        address buyer = evmAddresses[tronAddress];
         require(buyers[buyer].active);
         require(buyers[buyer].liquidity >= size);
         buyers[buyer].liquidity -= size;
@@ -150,7 +150,7 @@ contract Untron is Ownable {
 
         userActions[msg.sender].push(block.timestamp);
         orderExists[latestOrder] = true;
-        _isBusy[msg.sender] = false; // see: inverse flag "_isBusy"
+        _canCreateOrder[msg.sender] = false;
     }
 
     function fulfill(address[] calldata _tronAddresses, uint64[] calldata amounts) external {
@@ -161,6 +161,9 @@ contract Untron is Ownable {
                 continue; // not require bc someone could fulfill ahead of them
             }
 
+            // TODO: Should we verify that the amount fulfills the order entirely (minus the fee)?
+            //       If there is a partial fullfillment then when revealing the user would be getting 
+            //       the partial fulfillment + the total of the order
             uint64 amount = amounts[i];
             require(usdt.transferFrom(msg.sender, address(this), amount));
 
@@ -215,17 +218,22 @@ contract Untron is Ownable {
             uint64 amount = order.size < state.inflow ? order.size : state.inflow;
             amount = amount * 1e6 / order.rate;
             uint64 _paymasterFine = params.feePerBlock * ORDER_TTL - amount;
+
+            uint64 left = order.size - amount;
+            buyers[evmAddresses[state.tronAddress]].liquidity += left;
+
             amount -= params.feePerBlock * ORDER_TTL;
             amount -= params.revealerFee;
-            uint64 left = order.size - amount;
-            buyers[tronAddresses[state.tronAddress]].liquidity += left;
 
+            // TODO: Paymaster fine is unused
             paymasterFine += _paymasterFine;
             if (order.fulfilledAmount + params.fulfillerFee == amount) {
                 require(usdt.transfer(order.fulfiller, amount));
             } else {
                 params.sender.send(amount, order.transferData);
             }
+            
+            _canCreateOrder[order.creator] = true;
         }
         totalFee += params.revealerFee * uint64(closedOrders.length);
 
