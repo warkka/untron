@@ -51,9 +51,9 @@ contract Untron is Ownable {
     mapping(address => uint256) public orderCount; // tron address -> order count
 
     struct Order {
+        address by;
         uint64 size;
         uint64 rate;
-        address creator;
         bytes transferData;
         address fulfiller;
         uint64 fulfilledAmount;
@@ -129,6 +129,7 @@ contract Untron is Ownable {
         buyers[buyer].liquidity -= size;
 
         orders[tronAddress] = Order({
+            by: msg.sender,
             size: size,
             rate: buyers[buyer].rate,
             transferData: transferData,
@@ -162,7 +163,7 @@ contract Untron is Ownable {
             }
 
             // TODO: Should we verify that the amount fulfills the order entirely (minus the fee)?
-            //       If there is a partial fullfillment then when revealing the user would be getting 
+            //       If there is a partial fullfillment then when revealing the user would be getting
             //       the partial fulfillment + the total of the order
             uint64 amount = amounts[i];
             require(usdt.transferFrom(msg.sender, address(this), amount));
@@ -232,8 +233,8 @@ contract Untron is Ownable {
             } else {
                 params.sender.send(amount, order.transferData);
             }
-            
-            _canCreateOrder[order.creator] = true;
+
+            _canCreateOrder[order.by] = true;
         }
         totalFee += params.revealerFee * uint64(closedOrders.length);
 
