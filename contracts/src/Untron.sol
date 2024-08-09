@@ -177,7 +177,7 @@ contract Untron is Ownable {
         }
     }
 
-    function _isLatestAtTimestamp(bytes32 order, uint32 timestamp) internal view returns (bool) {
+    function _isLastAtTimestamp(bytes32 order, uint32 timestamp) internal view returns (bool) {
         uint256 orderIndex = orderIndexes[order];
         if (orderTimestamps[orderIndex] <= timestamp && orderTimestamps[orderIndex + 1] > timestamp) {
             return true;
@@ -218,7 +218,7 @@ contract Untron is Ownable {
         require(oldStateHash == stateHash);
         require(_feePerBlock == params.feePerBlock);
 
-        require(_isLatestAtTimestamp(endOrder, endBlockTimestamp));
+        require(_isLastAtTimestamp(endOrder, endBlockTimestamp));
 
         stateHash = newStateHash;
         latestKnownOrder = endOrder;
