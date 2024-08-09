@@ -15,7 +15,7 @@ const ORDER_TTL: u32 = 100; // blocks
 const BLOCK_TIME: u32 = 3000; // milliseconds
 
 type PublicValues = sol! {
-    tuple(address,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,uint64,uint64)
+    tuple(address,bytes32,bytes32,uint32,bytes32,bytes32,bytes32,bytes32,bytes32,uint64,uint64)
 };
 
 type OrderChain = sol! {
@@ -102,11 +102,13 @@ pub fn main() {
 
     let mut closed_orders = HashMap::new();
     let mut active_addresses = HashSet::new();
+    let mut end_block_timestamp = 0;
     for _ in 0..block_count {
         let block_raw_data = read_vec();
         let block =
             zktron::parse_block_header(end_block, &block_raw_data, zktron::hash(&block_raw_data));
 
+        end_block_timestamp = block.timestamp;
         let tx_count = read::<u32>();
 
         let mut txs = Vec::with_capacity(tx_count as usize);
@@ -164,6 +166,7 @@ pub fn main() {
         me,
         start_block,
         end_block,
+        end_block_timestamp,
         start_order_chain,
         end_order_chain,
         old_state_hash,

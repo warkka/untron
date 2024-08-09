@@ -44,8 +44,9 @@ contract Untron is Ownable {
     bytes32 public latestOrder;
     uint256 public totalOrders;
 
-    mapping(bytes32 => bool) public orderExists; // order chained hash -> bool
-    mapping(address => Order) public orders; // tron address -> Order
+    uint256[] public orderTimestamps; // order index -> timestamp
+    mapping(bytes32 => uint256) public orderIndexes;
+    mapping(address => Order) public activeOrders; // tron address -> Order
     mapping(address => address) public evmAddresses; // tron address -> evm address
     mapping(address => Buyer) public buyers; // EVM address -> Buyer
     mapping(address => uint256) public orderCount; // tron address -> order count
@@ -121,14 +122,14 @@ contract Untron is Ownable {
             "rl"
         );
         require(size >= params.minSize);
-        require(orders[tronAddress].size == 0);
+        require(activeOrders[tronAddress].size == 0);
 
         address buyer = evmAddresses[tronAddress];
         require(buyers[buyer].active);
         require(buyers[buyer].liquidity >= size);
         buyers[buyer].liquidity -= size;
 
-        orders[tronAddress] = Order({
+        activeOrders[tronAddress] = Order({
             by: msg.sender,
             size: size,
             rate: buyers[buyer].rate,
@@ -137,11 +138,12 @@ contract Untron is Ownable {
             fulfilledAmount: 0
         });
 
+        uint32 orderTimestamp = Tronlib.unixToTron(block.timestamp);
         latestOrder = sha256(
             abi.encode(
                 OrderChain({
                     prev: latestOrder,
-                    timestamp: Tronlib.unixToTron(block.timestamp),
+                    timestamp: orderTimestamp,
                     tronAddress: tronAddress,
                     minDeposit: buyers[buyer].minDeposit
                 })
@@ -150,7 +152,8 @@ contract Untron is Ownable {
         totalOrders++;
 
         userActions[msg.sender].push(block.timestamp);
-        orderExists[latestOrder] = true;
+        orderIndexes[latestOrder] = orderTimestamps.length;
+        orderTimestamps.push(orderTimestamp);
         _canCreateOrder[msg.sender] = false;
     }
 
@@ -158,7 +161,7 @@ contract Untron is Ownable {
         for (uint256 i = 0; i < _tronAddresses.length; i++) {
             address tronAddress = _tronAddresses[i];
 
-            if (orders[tronAddress].fulfilledAmount != 0) {
+            if (activeOrders[tronAddress].fulfilledAmount != 0) {
                 continue; // not require bc someone could fulfill ahead of them
             }
 
@@ -168,10 +171,18 @@ contract Untron is Ownable {
             uint64 amount = amounts[i];
             require(usdt.transferFrom(msg.sender, address(this), amount));
 
-            params.sender.send(amount, orders[tronAddress].transferData);
-            orders[tronAddress].fulfiller = msg.sender;
-            orders[tronAddress].fulfilledAmount = amount;
+            params.sender.send(amount, activeOrders[tronAddress].transferData);
+            activeOrders[tronAddress].fulfiller = msg.sender;
+            activeOrders[tronAddress].fulfilledAmount = amount;
         }
+    }
+
+    function _isLastAtTimestamp(bytes32 order, uint32 timestamp) internal view returns (bool) {
+        uint256 orderIndex = orderIndexes[order];
+        if (orderTimestamps[orderIndex] <= timestamp && orderTimestamps[orderIndex + 1] > timestamp) {
+            return true;
+        }
+        return false;
     }
 
     function revealDeposits(bytes calldata proof, bytes calldata publicValues, ClosedOrder[] calldata closedOrders)
@@ -184,6 +195,7 @@ contract Untron is Ownable {
             address relayer,
             bytes32 startBlock,
             bytes32 endBlock,
+            uint32 endBlockTimestamp,
             bytes32 startOrder,
             bytes32 endOrder,
             bytes32 oldStateHash,
@@ -192,7 +204,8 @@ contract Untron is Ownable {
             uint64 _feePerBlock,
             uint64 totalFee
         ) = abi.decode(
-            publicValues, (address, bytes32, bytes32, bytes32, bytes32, bytes32, bytes32, bytes32, uint64, uint64)
+            publicValues,
+            (address, bytes32, bytes32, uint32, bytes32, bytes32, bytes32, bytes32, bytes32, uint64, uint64)
         );
 
         require(msg.sender == relayer);
@@ -202,9 +215,10 @@ contract Untron is Ownable {
         require(params.relay.blocks(endBlockNumber) == endBlock);
         require(endBlockNumber < params.relay.latestBlock() - 18);
         require(startOrder == latestKnownOrder);
-        require(orderExists[endOrder]);
         require(oldStateHash == stateHash);
         require(_feePerBlock == params.feePerBlock);
+
+        require(_isLastAtTimestamp(endOrder, endBlockTimestamp));
 
         stateHash = newStateHash;
         latestKnownOrder = endOrder;
@@ -214,7 +228,7 @@ contract Untron is Ownable {
         uint64 paymasterFine = 0;
         for (uint256 i = 0; i < closedOrders.length; i++) {
             ClosedOrder memory state = closedOrders[i];
-            Order memory order = orders[state.tronAddress];
+            Order memory order = activeOrders[state.tronAddress];
 
             uint64 amount = order.size < state.inflow ? order.size : state.inflow;
             amount = amount * 1e6 / order.rate;
