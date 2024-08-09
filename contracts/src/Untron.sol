@@ -179,7 +179,10 @@ contract Untron is Ownable {
 
     function _isLastAtTimestamp(bytes32 order, uint32 timestamp) internal view returns (bool) {
         uint256 orderIndex = orderIndexes[order];
-        return (orderTimestamps[orderIndex] <= timestamp && orderTimestamps[orderIndex + 1] > timestamp);
+        return (
+            orderTimestamps[orderIndex] <= timestamp && 
+            (orderIndex == orderTimestamps.length - 1 || orderTimestamps[orderIndex + 1] > timestamp)
+        );
     }
 
     function revealDeposits(bytes calldata proof, bytes calldata publicValues, ClosedOrder[] calldata closedOrders)
