@@ -21,7 +21,11 @@ contract TronRelay is ITronRelay, Ownable {
         bytes32 blockprint;
     }
 
-    constructor() Ownable(msg.sender) {}
+    constructor(bytes32 blockId, uint256 blockNumber) Ownable(msg.sender) {
+        latestBlockNumber = blockNumber;
+        blocks[blockNumber] = blockId;
+        // this is all blocks we need to correctly operate the system later
+    }
 
     // We do a little optimization trick here.
     // Instead of parsing protobuf which would be pretty expensive
@@ -51,7 +55,7 @@ contract TronRelay is ITronRelay, Ownable {
         bytes[] calldata signatures,
         uint256[] calldata offsets
     ) external {
-        // TODO: We here assume that this function is never used in the first iteration, 
+        // TODO: We here assume that this function is never used in the first iteration,
         //       that is that latestBlockNumber is never 0.
         require(reorgDepth == 0 || newBlocks.length >= 19);
         require(reorgDepth < 19);
