@@ -55,27 +55,28 @@ contract TronRelay is ITronRelay, Ownable {
         bytes[] calldata signatures,
         uint256[] calldata offsets
     ) external {
-        // TODO: We here assume that this function is never used in the first iteration,
-        //       that is that latestBlockNumber is never 0.
         require(reorgDepth == 0 || newBlocks.length >= 19);
         require(reorgDepth < 19);
         latestBlockNumber -= reorgDepth;
 
-        //address[] memory cycle = new address[](18);
+        address[] memory cycle = new address[](18);
         for (uint256 i = 0; i < newBlocks.length; i++) {
             bytes memory rawData = newBlocks[i];
             bytes32 blockHash = sha256(rawData);
 
             (uint8 v, bytes32 r, bytes32 s) = abi.decode(signatures[i], (uint8, bytes32, bytes32));
             address sr = ecrecover(blockHash, v, r, s);
-            require(srs[sr]);
 
-            // TODO: Actually do this in solidity efficiently :)
-            //if (cycle.length == 18) {
-            //    cycle.remove(0);
-            //}
-            //require(!cycle[sr]);
-            //cycle.push(sr);
+            // SR cycle move
+            srs[cycle[0]] = true;
+            for (uint256 y = 0; y < 17; y++) {
+                cycle[y] = cycle[y + 1];
+            }
+            cycle[17] = sr;
+
+            // is SR and did not propose for the last 18 blocks
+            require(srs[sr]);
+            srs[sr] = false;
 
             require(isValidHeader(blocks[latestBlockNumber], rawData, offsets[i]));
 
