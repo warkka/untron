@@ -6,7 +6,7 @@ As a first step, we will be testing the circuit with scripts. At some point, we 
 
 ## Context
 
-For the tests, we will be using actual tron blocks from block XXXXXXX to YYYYYYY. The srs.json file will contain the SRs (Super Representatives) for those blocks (which correspond to maintainance window XXX or epochs XXXX to YYYY)
+For the tests, we will be using actual tron blocks from block 64301464 to 64308662 (2024-08-13 09:00:00 - 2024-08-13 15:00:00). The srs.json file will contain the SRs (Super Representatives) for those blocks (which correspond to that epoch)
 A portion of the blocks will be obtained for every run from the tron network to test the circuit.
 
 ## Running

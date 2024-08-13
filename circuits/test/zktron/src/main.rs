@@ -9,6 +9,10 @@ use k256::ecdsa::{RecoveryId, Signature, VerifyingKey};
 use tonic::transport::Channel;
 use tonic::Request;
 use block_header::Raw;
+use serde_json;
+use std::str::FromStr;
+
+mod test;
 
 tonic::include_proto!("protocol");
 
@@ -64,6 +68,17 @@ fn sample_block_range(
     Some((sampled_start_block, sampled_end_block))
 }
 
+fn parse_json_to_vec(json_data: &str) -> Result<Vec<Vec<u8>>, serde_json::Error> {
+    // Deserialize the JSON string into a Vec<String>
+    let string_vec: Vec<String> = serde_json::from_str(json_data)?;
+
+    // Convert each hexadecimal string into a Vec<u8>
+    let byte_vec: Vec<Vec<u8>> = string_vec.iter()
+        .map(|hex_str| hex::decode(hex_str).expect("Invalid hex string"))
+        .collect();
+
+    Ok(byte_vec)
+}
 
 #[derive(Deserialize)]
 struct Data {
@@ -77,6 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Setup the prover client.
     let client = ProverClient::new();
+    let (pk, vk) = client.setup(PROGRAM_ELF);
 
     // Setup the inputs.
     let mut stdin = SP1Stdin::new();
@@ -86,64 +102,77 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     let mut wallet_client = WalletClient::new(channel);
 
-    // Sample 200 sequential blocks between block number 64301464 and 64308662 (epoch)
-    let init_epoch_block = 64301464;
+    // Sample 18 sequential blocks between block number 64301464 and 64308662 (epoch) deterministically
+    let start_epoch_block = 64301464;
     let end_epoch_block = 64308662;
-    let sample_size = 200;
+    let sample_size = 18;
     let random_seed = 0xaeu8;
 
     // Call the function and destructure the result to get the start and end blocks
-    let Some((sampled_start, sampled_end)) = sample_block_range(start_block, end_block, sample_size, random_seed);
+    let Some((sampled_start, sampled_end)) = sample_block_range(start_epoch_block, end_epoch_block, sample_size, random_seed);
 
     let start_block = sampled_start;
     let end_block = sampled_end;
     
+    let blocks: Vec<Block> = Vec::new();
+    // Fetch blocks from Tron network
+    for block_number in start_block..end_block {
+        let (witness_signature, raw_data) = get_block_by_number(&mut wallet_client, block_number).await?;
+        println!("Block number: {}", block_number);
+        println!("Witness signature: {:?}", witness_signature);
+        println!("Raw data: {:?}", raw_data);
 
-    // Create different tests to prove the circuit with different witnesses.
+        let block = Block {
+            block_number,
+            witness_signature,
+            raw_data,
+        };
+        blocks.push(block);
+    }
 
-    // 1. Test with 19 blocks, where:
+    srs_list = parse_json_to_vec(include_str!("srs.json"))?;
+
+    let sp1_data = test::SP1Data {
+        client,
+        stdin,
+        pk,
+        vk
+    };
+    let test_data = test::InputTestData {
+        blocks,
+        srs_list
+    };
+
+    // 1. Test with 18 blocks, where:
     //      - All blocks are valid
     //      - All blocks are chained
     //      - All blocks are signed by a valid SR
-    //      - All blocks follow a round robin pattern on the SR signing
-    //      - Prove that y = f(x,w) is the same as y = C(x,w)
+    //      - All blocks follow a 
+    //      - Assert that y = f(x,w) is the same as y = C(x,w)
+    test::test_valid_case(test_data, sp1_data); 
 
-
-
+    // 2. Test with 18 blocks, where:
+    //      - Everything from the first test is the same
+    //      - But 1 block is invalid
+    //      - Assert that proving fails
     
+    // 3. Test with 18 blocks, where:
+    //      - Everything from first test is the same
+    //      - But a pair of blocks are not chained
+    //      - Assert that proving fails
+
+    // 4. Test with 18 blocks, where:
+    //      - Everything from first test is the same
+    //      - But 1 block is signed by some public key that is not a SR
+    //      - Assert that proving fails
+
+    // 5. Test with 18 blocks, where:
+    //      - Everything from first test is the same
+    //      - But 1 block is signed by a SR twice
+    //      - Assert that proving fails
+
+    // 6. Test with 17 blocks, where:
+    //      - Assert that proving fails (not enough blocks)
     
-    let block_count = 19u32;
-
-    stdin.write(&start_block.to_le_bytes()); // start_block
-    stdin.write(&block_count.to_le_bytes()); // block_count
-    for block_number in start_block..end_block {
-        let (witness_signature, public_key, raw_data) = get_block_by_number(&mut wallet_client, block_number).await?;
-        println!("Block number: {}", block_number);
-        println!("Witness signature: {:?}", witness_signature);
-        println!("Public key: {:?}", public_key);
-        println!("Raw data: {:?}", raw_data);
-
-        stdin.write(&public_key); // srs_list
-        stdin.write(&raw_data); // raw_data
-        stdin.write(&witness_signature); // signature
-    }
-
-    println!("generating...");
-
-    // Generate the proof.
-    let (public_values, execution_report) = client
-        .execute(PROGRAM_ELF, stdin)
-        .expect("failed to generate proof");
-    println!("Successfully executed proof!\n");
-
-    println!("Public values: {:?}", public_values);
-    println!("Execution report: {:?}\n", execution_report);
-
-    let tic = execution_report.total_instruction_count();
-    let tsc = *execution_report
-        .syscall_counts
-        .get(&SyscallCode::SHA_COMPRESS)
-        .unwrap();
-
     Ok(())
 }

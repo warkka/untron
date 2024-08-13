@@ -24,6 +24,7 @@ pub fn main() {
     let mut end_block = start_block;
 
     let block_count = read::<u32>();
+    assert!(block_count >= 18);
 
     let mut srs = HashSet::new();
     let mut sr_print = Vec::with_capacity(27);
