@@ -22,16 +22,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     build_program("../../zktron");
 
     copy_dir_all(
-        Path::new("../../googleapis/google"),
-        Path::new("../../java-tron/protocol/src/main/protos/google"),
+        Path::new("../../lib/googleapis/google"),
+        Path::new("../../lib/java-tron/protocol/src/main/protos/google"),
     )?;
     tonic_build::configure()
         .build_server(false)
         .boxed("BlockExtention")
         .compile(
-            &["../../java-tron/protocol/src/main/protos/api/api.proto"],
-            &["../../java-tron/protocol/src/main/protos"],
+            &["../../lib/java-tron/protocol/src/main/protos/api/api.proto"],
+            &["../../lib/java-tron/protocol/src/main/protos"],
         )?;
-    fs::remove_dir_all("../../java-tron/protocol/src/main/protos/google")?;
+    fs::remove_dir_all("../../lib/java-tron/protocol/src/main/protos/google")?;
     Ok(())
 }

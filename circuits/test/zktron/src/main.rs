@@ -1,16 +1,15 @@
 // This is a script to test the circuit against real Tron data
 // and calculate the proving complexity
 
-use sp1_core::runtime::SyscallCode;
+use rand::{Rng, SeedableRng};
 use sp1_sdk::{ProverClient, SP1Stdin};
 use serde::Deserialize;
-use sha2::{Sha256, Digest};
-use k256::ecdsa::{RecoveryId, Signature, VerifyingKey};
 use tonic::transport::Channel;
 use tonic::Request;
 use block_header::Raw;
 use serde_json;
-use std::str::FromStr;
+use rand::rngs::StdRng;
+use prost::Message;
 
 mod test;
 
@@ -27,7 +26,7 @@ pub const PROGRAM_ELF: &[u8] =
 async fn get_block_by_number(
     client: &mut WalletClient<Channel>,
     block_number: u32,
-) -> Result<(Vec<u8>, Raw), Box<dyn std::error::Error>> {
+) -> Result<(Vec<u8>, Vec<u8>), Box<dyn std::error::Error>> {
     let request = Request::new(NumberMessage {
         num: block_number as i64,
     });
@@ -36,8 +35,8 @@ async fn get_block_by_number(
     let block = response.into_inner();
 
     Ok((
-        block.block_header.unwrap().witness_signature,
-        block.block_header.unwrap().raw_data.unwrap()
+        block.block_header.clone().unwrap().witness_signature,
+        block.block_header.clone().unwrap().raw_data.as_ref().unwrap().encode_to_vec(),
     ))
 }
 
@@ -55,7 +54,7 @@ fn sample_block_range(
     }
 
     // Seed the random number generator
-    let mut rng = StdRng::seed_from_u64(random_seed.into());
+    let mut rng = StdRng::seed_from_u64(random_seed as u64);
 
     // Determine the starting point within the range
     let max_start = total_blocks - sample_size;
@@ -78,11 +77,6 @@ fn parse_json_to_vec(json_data: &str) -> Result<Vec<Vec<u8>>, serde_json::Error>
         .collect();
 
     Ok(byte_vec)
-}
-
-#[derive(Deserialize)]
-struct Data {
-    list: Vec<String>,
 }
 
 #[tokio::main]
@@ -109,12 +103,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let random_seed = 0xaeu8;
 
     // Call the function and destructure the result to get the start and end blocks
-    let Some((sampled_start, sampled_end)) = sample_block_range(start_epoch_block, end_epoch_block, sample_size, random_seed);
+    let Some((sampled_start, sampled_end)) = sample_block_range(start_epoch_block, end_epoch_block, sample_size, random_seed) else { todo!() };
 
     let start_block = sampled_start;
     let end_block = sampled_end;
     
-    let blocks: Vec<Block> = Vec::new();
+    let mut blocks: Vec<test::Block> = Vec::new();
     // Fetch blocks from Tron network
     for block_number in start_block..end_block {
         let (witness_signature, raw_data) = get_block_by_number(&mut wallet_client, block_number).await?;
@@ -122,7 +116,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Witness signature: {:?}", witness_signature);
         println!("Raw data: {:?}", raw_data);
 
-        let block = Block {
+        let block = test::Block {
             block_number,
             witness_signature,
             raw_data,
@@ -130,9 +124,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         blocks.push(block);
     }
 
-    srs_list = parse_json_to_vec(include_str!("srs.json"))?;
+    let srs_list = parse_json_to_vec(include_str!("srs.json"))?;
 
-    let sp1_data = test::SP1Data {
+    println!("SRS list: {:?}", srs_list);
+
+    /*let sp1_data = test::SP1Data {
         client,
         stdin,
         pk,
@@ -143,13 +139,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         srs_list
     };
 
+    let InputTestData { blocks, srs_list } = input;
+    */
+
+    let start_block = blocks[0].block_number;
+    let block_count = blocks.len();
+
+    stdin.write(&start_block); // start_block
+    stdin.write(&block_count); // block_count
+
+    for sr in srs_list {
+        stdin.write_vec(sr); // srs_list
+    }
+
+    for block in blocks {
+        // TODO: See why with this fakeVec write proving still works fine when it should fail
+        let fakeVec = vec![0u8; 32];
+        stdin.write_vec(fakeVec); // raw_data
+        stdin.write_vec(block.witness_signature); // signature
+    }
+
+    // Generate the proof.
+    let proof = client.prove_compressed(&pk, stdin).expect("failed to generate proof");
+    println!("Successfully executed proof!\n");
+
+    println!("Public values: {:?}", proof.public_values);
+
+    // Verify the proof
+    let verified = client
+        .verify_compressed(&proof, &vk)
+        .expect("failed to verify proof");
+
+    println!("Successfully verified proof!\n");
+    println!("Verified: {:?}", verified);
+
     // 1. Test with 18 blocks, where:
     //      - All blocks are valid
     //      - All blocks are chained
     //      - All blocks are signed by a valid SR
     //      - All blocks follow a 
     //      - Assert that y = f(x,w) is the same as y = C(x,w)
-    test::test_valid_case(test_data, sp1_data); 
+    //test::test_valid_case(test_data, &sp1_data); 
 
     // 2. Test with 18 blocks, where:
     //      - Everything from the first test is the same
