@@ -22,7 +22,7 @@ contract Untron is Ownable {
         ISender sender;
         bytes32 vkey;
         address relayer;
-        address paymaster;
+        address registrar;
         uint64 minSize;
         uint64 feePerBlock;
         uint64 revealerFee;
@@ -108,8 +108,8 @@ contract Untron is Ownable {
         return _canCreateOrder[who];
     }
 
-    function register(bytes calldata paymasterSig) external {
-        require(ECDSA.recover(bytes32(uint256(uint160(msg.sender))), paymasterSig) == params.paymaster);
+    function register(bytes calldata registrarSig) external {
+        require(ECDSA.recover(bytes32(uint256(uint160(msg.sender))), registrarSig) == params.registrar);
         require(userActions[msg.sender].length == 0);
         _canCreateOrder[msg.sender] = true;
     }
