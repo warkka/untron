@@ -10,20 +10,22 @@ contract TronRelay is ITronRelay, Ownable {
     ISP1Verifier constant verifier = ISP1Verifier(address(0)); // TODO: change
     bytes32 constant vkey = bytes32(0); // TODO: change
 
-    uint256 public latestBlock;
-    mapping(uint256 => bytes32) public blocks;
-
+    uint256 public latestBlockNumber;
+    mapping(uint256 => bytes32) public blocks; // block number => block id
     mapping(address => bool) internal srs;
     bytes32 internal srPrint;
 
     struct LightClientOutput {
         bytes32 startBlock;
-        bytes32 endBlock;
         bytes32 srPrint;
         bytes32 blockprint;
     }
 
-    constructor() Ownable(msg.sender) {}
+    constructor(bytes32 blockId, uint256 blockNumber) Ownable(msg.sender) {
+        latestBlockNumber = blockNumber;
+        blocks[blockNumber] = blockId;
+        // this is all blocks we need to correctly operate the system later
+    }
 
     // We do a little optimization trick here.
     // Instead of parsing protobuf which would be pretty expensive
@@ -55,21 +57,32 @@ contract TronRelay is ITronRelay, Ownable {
     ) external {
         require(reorgDepth == 0 || newBlocks.length >= 19);
         require(reorgDepth < 19);
-        latestBlock -= reorgDepth;
+        latestBlockNumber -= reorgDepth;
 
+        address[] memory cycle = new address[](18);
         for (uint256 i = 0; i < newBlocks.length; i++) {
             bytes memory rawData = newBlocks[i];
             bytes32 blockHash = sha256(rawData);
 
             (uint8 v, bytes32 r, bytes32 s) = abi.decode(signatures[i], (uint8, bytes32, bytes32));
             address sr = ecrecover(blockHash, v, r, s);
+
+            // SR cycle move
+            srs[cycle[0]] = true;
+            for (uint256 y = 0; y < 17; y++) {
+                cycle[y] = cycle[y + 1];
+            }
+            cycle[17] = sr;
+
+            // is SR and did not propose for the last 18 blocks
             require(srs[sr]);
+            srs[sr] = false;
 
-            require(isValidHeader(blocks[latestBlock], rawData, offsets[i]));
+            require(isValidHeader(blocks[latestBlockNumber], rawData, offsets[i]));
 
-            latestBlock++;
-            bytes32 blockId = Tronlib.getBlockId(blockHash, latestBlock);
-            blocks[latestBlock] = blockId;
+            latestBlockNumber++;
+            bytes32 blockId = Tronlib.getBlockId(blockHash, latestBlockNumber);
+            blocks[latestBlockNumber] = blockId;
         }
     }
 
@@ -77,7 +90,7 @@ contract TronRelay is ITronRelay, Ownable {
         verifier.verifyProof(vkey, publicValues, proof);
 
         LightClientOutput memory output = abi.decode(publicValues, (LightClientOutput));
-        require(output.startBlock == blockIds[latestBlock]);
+        require(output.startBlock == blocks[latestBlockNumber]);
         require(output.srPrint == srPrint);
         require(sha256(abi.encode(blockIds)) == output.blockprint);
 
@@ -85,7 +98,12 @@ contract TronRelay is ITronRelay, Ownable {
             bytes32 blockId = blockIds[i];
             blocks[Tronlib.blockIdToNumber(blockId)] = blockId;
         }
-        latestBlock += blockIds.length;
+
+        if (latestBlockNumber == 0) {
+            latestBlockNumber = Tronlib.blockIdToNumber(blockIds[blockIds.length - 1]);
+        } else {
+            latestBlockNumber += blockIds.length;
+        }
     }
 
     function changeSrs(bytes[] calldata oldSrs, bytes[] calldata newSrs) external onlyOwner {
