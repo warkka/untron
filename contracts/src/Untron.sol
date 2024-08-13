@@ -165,9 +165,6 @@ contract Untron is Ownable {
                 continue; // not require bc someone could fulfill ahead of them
             }
 
-            // TODO: Should we verify that the amount fulfills the order entirely (minus the fee)?
-            //       If there is a partial fullfillment then when revealing the user would be getting
-            //       the partial fulfillment + the total of the order
             uint64 amount = amounts[i];
             require(usdt.transferFrom(msg.sender, address(this), amount));
 
@@ -180,8 +177,8 @@ contract Untron is Ownable {
     function _isLastAtTimestamp(bytes32 order, uint32 timestamp) internal view returns (bool) {
         uint256 orderIndex = orderIndexes[order];
         return (
-            orderTimestamps[orderIndex] <= timestamp && 
-            (orderIndex == orderTimestamps.length - 1 || orderTimestamps[orderIndex + 1] > timestamp)
+            orderTimestamps[orderIndex] <= timestamp
+                && (orderIndex == orderTimestamps.length - 1 || orderTimestamps[orderIndex + 1] > timestamp)
         );
     }
 
@@ -213,7 +210,7 @@ contract Untron is Ownable {
 
         uint256 endBlockNumber = Tronlib.blockIdToNumber(endBlock);
         require(params.relay.blocks(endBlockNumber) == endBlock);
-        require(endBlockNumber < params.relay.latestBlock() - 18);
+        require(endBlockNumber < params.relay.latestBlockNumber() - 18);
         require(startOrder == latestKnownOrder);
         require(oldStateHash == stateHash);
         require(_feePerBlock == params.feePerBlock);
@@ -224,15 +221,12 @@ contract Untron is Ownable {
         latestKnownOrder = endOrder;
 
         require(sha256(abi.encode(closedOrders)) == closedOrdersHash);
-
-        uint64 paymasterFine = 0;
         for (uint256 i = 0; i < closedOrders.length; i++) {
             ClosedOrder memory state = closedOrders[i];
             Order memory order = activeOrders[state.tronAddress];
 
             uint64 amount = order.size < state.inflow ? order.size : state.inflow;
             amount = amount * 1e6 / order.rate;
-            uint64 _paymasterFine = params.feePerBlock * ORDER_TTL - amount;
 
             uint64 left = order.size - amount;
             buyers[evmAddresses[state.tronAddress]].liquidity += left;
@@ -240,8 +234,6 @@ contract Untron is Ownable {
             amount -= params.feePerBlock * ORDER_TTL;
             amount -= params.revealerFee;
 
-            // TODO: Paymaster fine is unused
-            paymasterFine += _paymasterFine;
             if (order.fulfilledAmount + params.fulfillerFee == amount) {
                 require(usdt.transfer(order.fulfiller, amount));
             } else {
@@ -256,7 +248,7 @@ contract Untron is Ownable {
     }
 
     function jailbreak() external {
-        require(params.relay.latestBlock() > Tronlib.blockIdToNumber(latestKnownBlock) + 600); // 30 minutes
+        require(params.relay.latestBlockNumber() > Tronlib.blockIdToNumber(latestKnownBlock) + 600); // 30 minutes
         params.relayer = address(0);
     }
 }
