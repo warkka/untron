@@ -23,6 +23,8 @@ pub fn main() {
     let start_block = read::<[u8; 32]>(); // blockid
     let mut end_block = start_block;
 
+    let block_count = read::<u32>();
+
     let mut srs = HashSet::new();
     let mut sr_print = Vec::with_capacity(27);
     for _ in 0..27 {
@@ -32,7 +34,6 @@ pub fn main() {
     }
     let sr_print = hash(&BytesArray::abi_encode(&sr_print));
 
-    let block_count = read::<u32>();
     let mut block_ids = Vec::with_capacity(block_count as usize);
     let mut cycle = Vec::with_capacity(18);
 
