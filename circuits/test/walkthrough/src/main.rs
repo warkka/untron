@@ -135,25 +135,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut rng = rand::thread_rng();
     let old_orders = vec![Order {
-        address: rng.fill_bytes([0u8; 20]);
+        address: rng.fill_bytes([0u8; 20]),
         // Order expires at block 10 of revealing blocks.
-        timestamp: blocks[0].raw_data.timestamp - (ORDER_TTL * BLOCK_TIME) + (10 * BLOCK_TIME);
-        inflow: 5u64;
-        min_deposit: 1u64;
+        timestamp: blocks[0].raw_data.timestamp - (ORDER_TTL * BLOCK_TIME) + (10 * BLOCK_TIME),
+        inflow: 5u64,
+        min_deposit: 1u64
     }];
     let new_orders = vec![
         Order {
-            address: rng.fill_bytes([0u8; 20]);
+            address: rng.fill_bytes([0u8; 20]),
             // TODO: This should be expired, see if we need to send an extra block or not
-            timestamp: blocks[0].raw_data.timestamp;
-            inflow: None;
-            min_deposit: 1u64;
+            timestamp: blocks[0].raw_data.timestamp,
+            inflow: None,
+            min_deposit: 1u64
         },
         Order {
-            address: rng.fill_bytes([0u8; 20]);
-            timestamp: blocks[0].raw_data.timestamp + (25 * BLOCK_TIME);
-            inflow: None;
-            min_deposit: 1u64;
+            address: rng.fill_bytes([0u8; 20]),
+            timestamp: blocks[0].raw_data.timestamp + (25 * BLOCK_TIME),
+            inflow: None,
+            min_deposit: 1u64
         }
     ];
     let fee_per_block = 1u64;
@@ -172,6 +172,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         fee_per_block
     };
     test::test(valid_test_data, &sp1_data, true); 
+    
+    //  2. Test with 100 blocks, where:
+    //      - Since it is less than ORDER_TTL, then proving should fail
+    let invalid_test_data = test::InputTestData {
+        blocks: blocks[..100].to_vec(),
+        old_orders,
+        new_orders,
+        fee_per_block
+    };
+    test::test(invalid_test_data, &sp1_data, false);
     
     Ok(())
 }

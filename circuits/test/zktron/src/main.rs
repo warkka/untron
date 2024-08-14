@@ -156,8 +156,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let invalid_block_test_data = test::InputTestData {
         blocks: invalid_blocks,
         srs_list
-    }
-    test::test(invalid_block_test_data, sp1_data, false)
+    };
+    test::test(invalid_block_test_data, &sp1_data, false);
     
     // 3. Test with 18 blocks, where:
     //      - Everything from first test is the same
@@ -168,8 +168,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let unchained_block_test_data = test::InputTestData {
         blocks: unchained_blocks,
         srs_list
-    }
-    test::test(unchained_block_test_data, sp1_data, false)
+    };
+    test::test(unchained_block_test_data, &sp1_data, false);
 
     // 4. Test with 18 blocks, where:
     //      - Everything from first test is the same
@@ -180,8 +180,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let non_sr_block_test_data = test::InputTestData {
         blocks: non_sr_blocks,
         srs_list
-    }
-    test::test(non_sr_block_test_data, sp1_data, false)
+    };
+    test::test(non_sr_block_test_data, &sp1_data, false);
 
     // 5. Test with 18 blocks, where:
     //      - Everything from first test is the same
@@ -192,8 +192,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let double_signed_block_test_data = test::InputTestData {
         blocks: double_signed_blocks,
         srs_list
-    }
-    test::test(double_signed_blocks, sp1_data, false)
+    };
+    test::test(double_signed_blocks, &sp1_data, false);
 
     // 6. Test with 17 blocks, where:
     //      - Assert that proving fails (not enough blocks)
@@ -202,8 +202,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let not_enough_blocks_test_data = test::InputTestData {
         blocks: not_enough_blocks,
         srs_list
-    }
-    test::test(not_enough_blocks_test_data, sp1_data, false)
+    };
+    test::test(not_enough_blocks_test_data, &sp1_data, false);
     
     Ok(())
 }
