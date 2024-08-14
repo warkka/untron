@@ -1,7 +1,7 @@
 {
   "name": "untron-contracts",
   "version": "1.0.0",
-  "description": "Untron smart contracts",
+  "description": "Smart contracts for Untron.finance",
   "directories": {
     "lib": "lib",
     "test": "test"
@@ -19,10 +19,19 @@
     "README.md"
   ],
   "keywords": [
-    "untron"
+    "untron",
+    "ethereum",
+    "crypto",
+    "tron",
+    "bridge",
+    "solidity",
+    "evm",
+    "untronfi",
+    "untronfinance",
+    "finance"
   ],
   "author": "ultrasoundlabs",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/ultrasoundlabs/untron/issues"
   },
