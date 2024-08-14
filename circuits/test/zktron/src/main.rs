@@ -23,6 +23,16 @@ use wallet_client::WalletClient;
 pub const PROGRAM_ELF: &[u8] =
     include_bytes!("../../../zktron/elf/riscv32im-succinct-zkvm-elf");
 
+// TODO: Use directly from zktron::lib
+pub fn hash(data: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+
+    let mut result = [0u8; 32];
+    result.copy_from_slice(&hasher.finalize());
+    result
+}
+
 async fn get_block_by_number(
     client: &mut WalletClient<Channel>,
     block_number: u32,
@@ -142,8 +152,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let InputTestData { blocks, srs_list } = input;
     */
 
-    let start_block = blocks[0].block_number;
-    let block_count = blocks.len();
+    // TODO: Use directly from zktron/lib
+    let start_block_number = blocks[0].block_number;
+    let raw_data_hash = hash(&blocks[0].raw_data); 
+    let start_block = raw_data_hash[..4].copy_from_slice(&start_block_number.to_be_bytes());
+
+    let block_count = blocks.len() as u32;
 
     stdin.write(&start_block); // start_block
     stdin.write(&block_count); // block_count
