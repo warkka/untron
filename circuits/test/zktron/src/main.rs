@@ -23,16 +23,6 @@ use wallet_client::WalletClient;
 pub const PROGRAM_ELF: &[u8] =
     include_bytes!("../../../zktron/elf/riscv32im-succinct-zkvm-elf");
 
-// TODO: Use directly from zktron::lib
-pub fn hash(data: &[u8]) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-
-    let mut result = [0u8; 32];
-    result.copy_from_slice(&hasher.finalize());
-    result
-}
-
 async fn get_block_by_number(
     client: &mut WalletClient<Channel>,
     block_number: u32,
@@ -138,54 +128,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("SRS list: {:?}", srs_list);
 
-    /*let sp1_data = test::SP1Data {
+    let sp1_data = test::SP1Data {
         client,
         stdin,
         pk,
         vk
     };
-    let test_data = test::InputTestData {
-        blocks,
-        srs_list
-    };
-
-    let InputTestData { blocks, srs_list } = input;
-    */
-
-    // TODO: Use directly from zktron/lib
-    let start_block_number = blocks[0].block_number;
-    let raw_data_hash = hash(&blocks[0].raw_data); 
-    let start_block = raw_data_hash[..4].copy_from_slice(&start_block_number.to_be_bytes());
-
-    let block_count = blocks.len() as u32;
-
-    stdin.write(&start_block); // start_block
-    stdin.write(&block_count); // block_count
-
-    for sr in srs_list {
-        stdin.write_vec(sr); // srs_list
-    }
-
-    for block in blocks {
-        // TODO: See why with this fakeVec write proving still works fine when it should fail
-        let fakeVec = vec![0u8; 32];
-        stdin.write_vec(fakeVec); // raw_data
-        stdin.write_vec(block.witness_signature); // signature
-    }
-
-    // Generate the proof.
-    let proof = client.prove_compressed(&pk, stdin).expect("failed to generate proof");
-    println!("Successfully executed proof!\n");
-
-    println!("Public values: {:?}", proof.public_values);
-
-    // Verify the proof
-    let verified = client
-        .verify_compressed(&proof, &vk)
-        .expect("failed to verify proof");
-
-    println!("Successfully verified proof!\n");
-    println!("Verified: {:?}", verified);
 
     // 1. Test with 18 blocks, where:
     //      - All blocks are valid
@@ -193,30 +141,69 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //      - All blocks are signed by a valid SR
     //      - All blocks follow a 
     //      - Assert that y = f(x,w) is the same as y = C(x,w)
-    //test::test_valid_case(test_data, &sp1_data); 
+    let valid_test_data = test::InputTestData {
+        blocks,
+        srs_list
+    };
+    test::test(valid_test_data, &sp1_data, true); 
 
     // 2. Test with 18 blocks, where:
     //      - Everything from the first test is the same
     //      - But 1 block is invalid
     //      - Assert that proving fails
+    let invalid_blocks = blocks.clone();
+    invalid_blocks[5].raw_data[0] = 0u8;
+    let invalid_block_test_data = test::InputTestData {
+        blocks: invalid_blocks,
+        srs_list
+    }
+    test::test(invalid_block_test_data, sp1_data, false)
     
     // 3. Test with 18 blocks, where:
     //      - Everything from first test is the same
     //      - But a pair of blocks are not chained
     //      - Assert that proving fails
+    let unchained_blocks = blocks.clone();
+    // TODO: Modify the blocks to make them unchained by modifying the raw_data.parent_hash field for some block
+    let unchained_block_test_data = test::InputTestData {
+        blocks: unchained_blocks,
+        srs_list
+    }
+    test::test(unchained_block_test_data, sp1_data, false)
 
     // 4. Test with 18 blocks, where:
     //      - Everything from first test is the same
     //      - But 1 block is signed by some public key that is not a SR
     //      - Assert that proving fails
+    let non_sr_blocks = blocks.clone();
+    // TODO: Sign block with a public key that is not a SR
+    let non_sr_block_test_data = test::InputTestData {
+        blocks: non_sr_blocks,
+        srs_list
+    }
+    test::test(non_sr_block_test_data, sp1_data, false)
 
     // 5. Test with 18 blocks, where:
     //      - Everything from first test is the same
     //      - But 1 block is signed by a SR twice
     //      - Assert that proving fails
+    let double_signed_blocks = blocks.clone();
+    // TODO: Sign block with a public key that is a SR and overwrite the signature of some block
+    let double_signed_block_test_data = test::InputTestData {
+        blocks: double_signed_blocks,
+        srs_list
+    }
+    test::test(double_signed_blocks, sp1_data, false)
 
     // 6. Test with 17 blocks, where:
     //      - Assert that proving fails (not enough blocks)
+    let not_enough_blocks = blocks.clone();
+    not_enough_blocks.pop();
+    let not_enough_blocks_test_data = test::InputTestData {
+        blocks: not_enough_blocks,
+        srs_list
+    }
+    test::test(not_enough_blocks_test_data, sp1_data, false)
     
     Ok(())
 }
