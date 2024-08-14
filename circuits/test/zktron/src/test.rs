@@ -30,6 +30,7 @@ pub fn hash(data: &[u8]) -> [u8; 32] {
 }
 
 pub fn execute(sp1_data: &SP1Data) {
+    // Execute the proof.
     let proof = sp1_data.client.execute(&sp1_data.pk, sp1_data.stdin.clone()).expect("failed to generate proof");
     println!("Successfully executed proof!\n");
 
@@ -79,29 +80,9 @@ pub fn test(input: InputTestData, sp1_data: &SP1Data, prove: Bool) {
     }
 
     if (prove) {
-        prove_and_verify(sp1_data);
+        public_values = prove_and_verify(sp1_data);
+        // TODO: Validate that public values are ok
     } else {
         execute(sp1_data);
     }
 }
-
-pub fn test_invalid_block_case(input: InputTestData, sp1_data: SP1Data) {
-
-}
-
-pub fn test_unchained_blocks_case(input: InputTestData, sp1_data: SP1Data) {
-
-}
-
-pub fn test_non_sr_signature_case(input: InputTestData, sp1_data: SP1Data) {
-
-}
-
-pub fn test_sr_duplicated_signature_case(input: InputTestData, sp1_data: SP1Data) {
-
-}
-
-pub fn test_not_enough_blocks_case(input: InputTestData, sp1_data: SP1Data) {
-
-}
-*/
