@@ -6,12 +6,12 @@
 	path = contracts/lib/sp1-contracts
 	url = https://github.com/succinctlabs/sp1-contracts
 	tag = main
-[submodule "circuits/script/java-tron"]
-	path = circuits/script/java-tron
-	url = https://github.com/tronprotocol/java-tron
-[submodule "circuits/script/googleapis"]
-	path = circuits/script/googleapis
-	url = https://github.com/googleapis/googleapis.git
 [submodule "contracts/lib/openzeppelin-contracts"]
 	path = contracts/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "lib/java-tron"]
+	path = lib/java-tron
+	url = https://github.com/tronprotocol/java-tron
+[submodule "lib/googleapis"]
+	path = lib/googleapis
+	url = https://github.com/googleapis/googleapis
