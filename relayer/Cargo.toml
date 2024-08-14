@@ -1,0 +1,8 @@
+[package]
+name = "relayerware"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+sp1-sdk = { git = "https://github.com/succinctlabs/sp1.git", tag = "v1.0.7-testnet" }
