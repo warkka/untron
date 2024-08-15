@@ -14,7 +14,7 @@ pub struct BlockHeader {
     pub prev_block_id: [u8; 32],
     pub new_block_id: [u8; 32],
     pub tx_root: [u8; 32],
-    pub timestamp: u32,
+    pub timestamp: u64,
 }
 
 pub fn read_varint(arr: &[u8]) -> (usize, usize) {
@@ -65,13 +65,13 @@ pub fn parse_block_header(prev_block_id: [u8; 32], raw_data: &[u8], hash: [u8; 3
     let (block_number, _) = read_varint(&raw_data[offset..]);
 
     let mut new_block_id = hash;
-    new_block_id[..4].copy_from_slice(&block_number.to_be_bytes());
+    new_block_id[..8].copy_from_slice(&(block_number as u64).to_be_bytes());
 
     BlockHeader {
         prev_block_id,
         new_block_id,
         tx_root,
-        timestamp: timestamp as u32,
+        timestamp: timestamp as u64
     }
 }
 
@@ -86,5 +86,6 @@ pub fn recover_public_key(sig: &[u8], msg_hash: [u8; 32]) -> Vec<u8> {
     let recid = RecoveryId::from_byte(recid).unwrap();
 
     let recovered_key = VerifyingKey::recover_from_prehash(&msg_hash[..], &sig, recid).unwrap();
-    recovered_key.to_encoded_point(true).as_bytes().to_vec()
+    let bytes_recovered_key = recovered_key.to_encoded_point(false).as_bytes().to_vec();
+    return bytes_recovered_key[1..].to_vec();
 }

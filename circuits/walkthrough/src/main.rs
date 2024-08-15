@@ -11,30 +11,30 @@ use sp1_zkvm::io::*;
 
 use crypto::*;
 
-const ORDER_TTL: u32 = 100; // blocks
-const BLOCK_TIME: u32 = 3000; // milliseconds
+const ORDER_TTL: u64 = 100; // blocks
+const BLOCK_TIME: u64 = 3000; // milliseconds
 
 type PublicValues = sol! {
-    tuple(address,bytes32,bytes32,uint32,bytes32,bytes32,bytes32,bytes32,bytes32,uint64,uint64)
+    tuple(address,bytes32,bytes32,uint64,bytes32,bytes32,bytes32,bytes32,bytes32,uint64,uint64)
 };
 
 type OrderChain = sol! {
-    tuple(bytes32,uint32,address,uint64)
+    tuple(bytes32,uint64,address,uint64)
 };
 
 type EncodedState = sol! {
-    tuple(address,uint32,uint64,uint64)[]
+    tuple(address,uint64,uint64,uint64)[]
 };
 
 #[derive(Clone, Debug)]
 struct OrderState {
-    timestamp: u32,
+    timestamp: u64,
     inflow: u64,
     min_deposit: u64,
 }
 
 fn build_state_hash(state: &HashMap<[u8; 20], OrderState>) -> [u8; 32] {
-    let tupled_state: Vec<([u8; 20], u32, u64, u64)> = state
+    let tupled_state: Vec<([u8; 20], u64, u64, u64)> = state
         .iter()
         .map(|(address, order)| (*address, order.timestamp, order.inflow, order.min_deposit))
         .collect();
@@ -48,7 +48,7 @@ pub fn main() {
     let state_length = read::<u32>();
     for _ in 0..state_length {
         let address = read::<[u8; 20]>();
-        let timestamp = read::<u32>();
+        let timestamp = read::<u64>();
         let inflow = read::<u64>();
         let min_deposit = read::<u64>();
 
@@ -74,7 +74,7 @@ pub fn main() {
         let mut element = Vec::with_capacity(32 * 3);
         element.extend_from_slice(&end_order_chain);
 
-        let timestamp = read::<u32>();
+        let timestamp = read::<u64>();
         let address = read::<[u8; 20]>();
         let min_deposit = read::<u64>();
 
@@ -95,7 +95,7 @@ pub fn main() {
     let mut end_block = start_block;
 
     let block_count = read::<u32>();
-    assert!(block_count > ORDER_TTL); // so that we don't have >1 queued relayers
+    assert!(block_count > (ORDER_TTL as u32)); // so that we don't have >1 queued relayers
 
     let mut total_fee = 0u64;
     let fee_per_block = read::<u64>();
