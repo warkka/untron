@@ -5,36 +5,24 @@ import {ISP1Verifier} from "@sp1-contracts/ISP1Verifier.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "./interfaces/ITronRelay.sol";
-import "./interfaces/ISender.sol";
+import "./interfaces/IUntron.sol";
 import "./Tronlib.sol";
 
-contract Untron is Ownable {
+contract Untron is IUntron, Ownable {
     IERC20 constant usdt = IERC20(0x493257fD37EDB34451f62EDf8D2a0C418852bA4C); // bridged USDT @ zksync era
 
     constructor() Ownable(msg.sender) {}
 
     uint64 constant ORDER_TTL = 100; // 100 blocks = 5 min
 
-    struct Params {
-        ISP1Verifier verifier;
-        ITronRelay relay;
-        ISender sender;
-        bytes32 vkey;
-        address relayer;
-        address registrar;
-        uint64 minSize;
-        uint64 feePerBlock;
-        uint64 revealerFee;
-        uint64 fulfillerFee;
-        uint256 rateLimit;
-        uint256 limitPer;
+    Params internal _params;
+
+    function params() external view returns (Params memory) {
+        return _params;
     }
 
-    Params public params;
-
-    function setParams(Params calldata _params) external onlyOwner {
-        params = _params;
+    function params(Params calldata __params) public onlyOwner {
+        _params = __params;
     }
 
     bytes32 public stateHash = bytes32(0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855); // sha256("")
@@ -46,32 +34,17 @@ contract Untron is Ownable {
 
     uint256[] public orderTimestamps; // order index -> timestamp
     mapping(bytes32 => uint256) public orderIndexes;
-    mapping(address => Order) public activeOrders; // tron address -> Order
+    mapping(address => Order) internal _activeOrders; // tron address -> Order
     mapping(address => address) public evmAddresses; // tron address -> evm address
-    mapping(address => Buyer) public buyers; // EVM address -> Buyer
+    mapping(address => Buyer) internal _buyers; // EVM address -> Buyer
     mapping(address => uint256) public orderCount; // tron address -> order count
 
-    struct Order {
-        address by;
-        uint64 size;
-        uint64 rate;
-        bytes transferData;
-        address fulfiller;
-        uint64 fulfilledAmount;
+    function activeOrders(address tronAddress) external view returns (Order memory) {
+        return _activeOrders[tronAddress];
     }
 
-    struct Buyer {
-        bool active;
-        uint64 liquidity;
-        uint64 rate;
-        uint64 minDeposit;
-    }
-
-    struct ClosedOrder {
-        address tronAddress;
-        uint32 timestamp;
-        uint64 inflow;
-        uint64 minDeposit; // needed for reverse swaps
+    function buyers(address evmAddress) external view returns (Buyer memory) {
+        return _buyers[evmAddress];
     }
 
     struct OrderChain {
@@ -84,19 +57,19 @@ contract Untron is Ownable {
     function setBuyer(uint64 liquidity, uint64 rate, uint64 minDeposit) external {
         require(usdt.transferFrom(msg.sender, address(this), liquidity));
 
-        buyers[msg.sender].active = true;
-        buyers[msg.sender].liquidity += liquidity;
-        buyers[msg.sender].rate = rate;
-        buyers[msg.sender].minDeposit = minDeposit;
+        _buyers[msg.sender].active = true;
+        _buyers[msg.sender].liquidity += liquidity;
+        _buyers[msg.sender].rate = rate;
+        _buyers[msg.sender].minDeposit = minDeposit;
     }
 
     function closeBuyer() external {
-        require(usdt.transfer(msg.sender, buyers[msg.sender].liquidity));
+        require(usdt.transfer(msg.sender, _buyers[msg.sender].liquidity));
 
-        delete buyers[msg.sender];
+        delete _buyers[msg.sender];
     }
 
-    mapping(address => uint256[]) userActions; // address -> timestamps of actions
+    mapping(address => uint256[]) internal userActions; // address -> timestamps of actions
     // checks whether the user can
     // create an order. when they can't, it must be false,
     // and vice versa. by default, all users can't
@@ -104,35 +77,34 @@ contract Untron is Ownable {
     // this is made like this to save storage slots.
     mapping(address => bool) internal _canCreateOrder;
 
-    function canCreateOrder(address who) internal view returns (bool) {
+    function canCreateOrder(address who) external view returns (bool) {
         return _canCreateOrder[who];
     }
 
     function register(bytes calldata registrarSig) external {
-        require(ECDSA.recover(bytes32(uint256(uint160(msg.sender))), registrarSig) == params.registrar);
+        require(ECDSA.recover(bytes32(uint256(uint160(msg.sender))), registrarSig) == _params.registrar);
         require(userActions[msg.sender].length == 0);
         _canCreateOrder[msg.sender] = true;
     }
 
     function createOrder(address tronAddress, uint64 size, bytes calldata transferData) external {
-        require(canCreateOrder(msg.sender), "bs");
+        require(_canCreateOrder[msg.sender]);
         require(
-            userActions[msg.sender][userActions[msg.sender].length - params.rateLimit] + params.limitPer
-                < block.timestamp,
-            "rl"
+            userActions[msg.sender][userActions[msg.sender].length - _params.rateLimit] + _params.limitPer
+                < block.timestamp
         );
-        require(size >= params.minSize);
-        require(activeOrders[tronAddress].size == 0);
+        require(size >= _params.minSize);
+        require(_activeOrders[tronAddress].size == 0);
 
         address buyer = evmAddresses[tronAddress];
-        require(buyers[buyer].active);
-        require(buyers[buyer].liquidity >= size);
-        buyers[buyer].liquidity -= size;
+        require(_buyers[buyer].active);
+        require(_buyers[buyer].liquidity >= size);
+        _buyers[buyer].liquidity -= size;
 
-        activeOrders[tronAddress] = Order({
+        _activeOrders[tronAddress] = Order({
             by: msg.sender,
             size: size,
-            rate: buyers[buyer].rate,
+            rate: _buyers[buyer].rate,
             transferData: transferData,
             fulfiller: address(0),
             fulfilledAmount: 0
@@ -145,7 +117,7 @@ contract Untron is Ownable {
                     prev: latestOrder,
                     timestamp: orderTimestamp,
                     tronAddress: tronAddress,
-                    minDeposit: buyers[buyer].minDeposit
+                    minDeposit: _buyers[buyer].minDeposit
                 })
             )
         );
@@ -161,16 +133,16 @@ contract Untron is Ownable {
         for (uint256 i = 0; i < _tronAddresses.length; i++) {
             address tronAddress = _tronAddresses[i];
 
-            if (activeOrders[tronAddress].fulfilledAmount != 0) {
+            if (_activeOrders[tronAddress].fulfilledAmount != 0) {
                 continue; // not require bc someone could fulfill ahead of them
             }
 
             uint64 amount = amounts[i];
             require(usdt.transferFrom(msg.sender, address(this), amount));
 
-            params.sender.send(amount, activeOrders[tronAddress].transferData);
-            activeOrders[tronAddress].fulfiller = msg.sender;
-            activeOrders[tronAddress].fulfilledAmount = amount;
+            _params.sender.send(amount, _activeOrders[tronAddress].transferData);
+            _activeOrders[tronAddress].fulfiller = msg.sender;
+            _activeOrders[tronAddress].fulfilledAmount = amount;
         }
     }
 
@@ -185,9 +157,9 @@ contract Untron is Ownable {
     function revealDeposits(bytes calldata proof, bytes calldata publicValues, ClosedOrder[] calldata closedOrders)
         external
     {
-        require(msg.sender == params.relayer || params.relayer == address(0));
+        require(msg.sender == _params.relayer || _params.relayer == address(0));
 
-        params.verifier.verifyProof(params.vkey, publicValues, proof);
+        _params.verifier.verifyProof(_params.vkey, publicValues, proof);
         (
             address relayer,
             bytes32 startBlock,
@@ -209,11 +181,11 @@ contract Untron is Ownable {
         require(startBlock == latestKnownBlock);
 
         uint256 endBlockNumber = Tronlib.blockIdToNumber(endBlock);
-        require(params.relay.blocks(endBlockNumber) == endBlock);
-        require(endBlockNumber < params.relay.latestBlockNumber() - 18);
+        require(_params.relay.blocks(endBlockNumber) == endBlock);
+        require(endBlockNumber < _params.relay.latestBlockNumber() - 18);
         require(startOrder == latestKnownOrder);
         require(oldStateHash == stateHash);
-        require(_feePerBlock == params.feePerBlock);
+        require(_feePerBlock == _params.feePerBlock);
 
         require(_isLastAtTimestamp(endOrder, endBlockTimestamp));
 
@@ -223,32 +195,32 @@ contract Untron is Ownable {
         require(sha256(abi.encode(closedOrders)) == closedOrdersHash);
         for (uint256 i = 0; i < closedOrders.length; i++) {
             ClosedOrder memory state = closedOrders[i];
-            Order memory order = activeOrders[state.tronAddress];
+            Order memory order = _activeOrders[state.tronAddress];
 
             uint64 amount = order.size < state.inflow ? order.size : state.inflow;
             amount = amount * 1e6 / order.rate;
 
             uint64 left = order.size - amount;
-            buyers[evmAddresses[state.tronAddress]].liquidity += left;
+            _buyers[evmAddresses[state.tronAddress]].liquidity += left;
 
-            amount -= params.feePerBlock * ORDER_TTL;
-            amount -= params.revealerFee;
+            amount -= _params.feePerBlock * ORDER_TTL;
+            amount -= _params.revealerFee;
 
-            if (order.fulfilledAmount + params.fulfillerFee == amount) {
+            if (order.fulfilledAmount + _params.fulfillerFee == amount) {
                 require(usdt.transfer(order.fulfiller, amount));
             } else {
-                params.sender.send(amount, order.transferData);
+                _params.sender.send(amount, order.transferData);
             }
 
             _canCreateOrder[order.by] = true;
         }
-        totalFee += params.revealerFee * uint64(closedOrders.length);
+        totalFee += _params.revealerFee * uint64(closedOrders.length);
 
         require(usdt.transfer(msg.sender, totalFee));
     }
 
     function jailbreak() external {
-        require(params.relay.latestBlockNumber() > Tronlib.blockIdToNumber(latestKnownBlock) + 600); // 30 minutes
-        params.relayer = address(0);
+        require(_params.relay.latestBlockNumber() > Tronlib.blockIdToNumber(latestKnownBlock) + 600); // 30 minutes
+        _params.relayer = address(0);
     }
 }
