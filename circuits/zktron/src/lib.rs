@@ -71,7 +71,7 @@ pub fn parse_block_header(prev_block_id: [u8; 32], raw_data: &[u8], hash: [u8; 3
         prev_block_id,
         new_block_id,
         tx_root,
-        timestamp: timestamp as u64
+        timestamp: timestamp as u64,
     }
 }
 
@@ -87,5 +87,5 @@ pub fn recover_public_key(sig: &[u8], msg_hash: [u8; 32]) -> Vec<u8> {
 
     let recovered_key = VerifyingKey::recover_from_prehash(&msg_hash[..], &sig, recid).unwrap();
     let bytes_recovered_key = recovered_key.to_encoded_point(false).as_bytes().to_vec();
-    return bytes_recovered_key[1..].to_vec();
+    bytes_recovered_key[1..].to_vec()
 }
