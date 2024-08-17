@@ -5,11 +5,13 @@ edition = "2021"
 
 
 [dependencies]
-sp1-sdk = { git = "https://github.com/succinctlabs/sp1.git", tag = "v1.0.7-testnet" }
+sp1-sdk = "1.1.0"
 zktron = { path = "../circuits/zktron" }
 tonic = { version = "0.12.1", features = ["prost"] }
 prost = "0.13.1"
 prost-types = "0.13.1"
+tokio = { version = "1.39.2", features = ["full"] }
+ethers = "2.0.14"
 
 [build-dependencies]
 tonic-build = "0.12.1"
