@@ -1,2 +1,4 @@
 @sp1-contracts/=./lib/sp1-contracts/contracts/src/
-@openzeppelin/=lib/openzeppelin-contracts/
+@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/
+@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
+@ultrasoundlabs/accounts/=lib/accounts/

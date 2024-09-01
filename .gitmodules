@@ -15,3 +15,9 @@
 [submodule "lib/googleapis"]
 	path = lib/googleapis
 	url = https://github.com/googleapis/googleapis
+[submodule "contracts/lib/openzeppelin-contracts-upgradeable"]
+	path = contracts/lib/openzeppelin-contracts-upgradeable
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable
+[submodule "contracts/lib/accounts"]
+	path = contracts/lib/accounts
+	url = https://github.com/ultrasoundlabs/Accounts

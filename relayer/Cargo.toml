@@ -1,12 +1,12 @@
 [package]
-name = "relayerware"
+name = "untron-relayer"
 version = "0.1.0"
 edition = "2021"
 
 
 [dependencies]
 sp1-sdk = "1.1.0"
-zktron = { path = "../circuits/zktron" }
+untron-circuit = { path = "../circuit" }
 tonic = { version = "0.12.1", features = ["prost"] }
 prost = "0.13.1"
 prost-types = "0.13.1"
