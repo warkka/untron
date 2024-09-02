@@ -1,7 +1,7 @@
 pub mod crypto;
 pub mod protobuf;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use alloy_sol_types::{sol, SolType};
 use serde::{Deserialize, Serialize};
@@ -16,6 +16,7 @@ pub type OrderChain = sol! {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct OrderState {
+    pub address: [u8; 20],
     pub timestamp: u64,
     pub inflow: u64,
     pub min_deposit: u64,
@@ -29,7 +30,7 @@ pub struct State {
     pub srs: [[u8; 20]; 27],
     pub votes: HashMap<[u8; 20], u64>,
 
-    pub orders: HashMap<[u8; 20], OrderState>,
+    pub orders: HashMap<[u8; 32], OrderState>,
     pub order_chain: [u8; 32],
 }
 
@@ -59,7 +60,7 @@ pub fn block_id_to_number(block_id: [u8; 32]) -> u64 {
     u64::from_be_bytes(block_number)
 }
 
-pub fn stf(mut state: State, execution: Execution) -> (State, Vec<([u8; 20], u64)>) {
+pub fn stf(mut state: State, execution: Execution) -> (State, Vec<([u8; 32], u64)>) {
     for order in execution.orders {
         let chained_order = OrderChain::abi_encode(&(
             state.order_chain,
@@ -68,10 +69,19 @@ pub fn stf(mut state: State, execution: Execution) -> (State, Vec<([u8; 20], u64
             order.min_deposit,
         ));
         state.order_chain = crypto::hash(&chained_order);
+        state.orders.insert(
+            state.order_chain,
+            OrderState {
+                address: order.address,
+                timestamp: order.timestamp,
+                inflow: 0,
+                min_deposit: order.min_deposit,
+            },
+        );
     }
 
     let mut closed_orders = Vec::new();
-    let mut active_addresses = HashSet::new();
+    let mut active_addresses: HashMap<[u8; 20], [u8; 32]> = HashMap::new();
     let block_count = execution.blocks.len();
     for (i, block) in execution.blocks.into_iter().enumerate() {
         // consensus checks (pka zktron)
@@ -103,15 +113,26 @@ pub fn stf(mut state: State, execution: Execution) -> (State, Vec<([u8; 20], u64
         // content checks (pka walkthrough)
 
         let orders_copy = state.orders.clone();
-        for (address, order) in orders_copy {
+        for (order_id, order) in orders_copy {
             if block_header.timestamp > order.timestamp + ORDER_TTL * BLOCK_TIME {
-                state.orders.remove(&address);
-                closed_orders.push((address, order.inflow));
-                active_addresses.remove(&address);
+                state.orders.remove(&order_id);
+                closed_orders.push((order_id, order.inflow));
+                active_addresses.remove(&order.address);
             } else if block_header.timestamp < order.timestamp {
                 continue;
             } else {
-                active_addresses.insert(address);
+                match active_addresses.entry(order.address) {
+                    // if the order is already active, we close it
+                    std::collections::hash_map::Entry::Occupied(_) => {
+                        state.orders.remove(&order_id);
+                        closed_orders.push((order_id, order.inflow));
+                        active_addresses.remove(&order.address);
+                    }
+                    // if the order is not active, we activate it
+                    std::collections::hash_map::Entry::Vacant(entry) => {
+                        entry.insert(order_id);
+                    }
+                }
             }
         }
 
@@ -129,11 +150,11 @@ pub fn stf(mut state: State, execution: Execution) -> (State, Vec<([u8; 20], u64
 
             match protobuf::parse_usdt_transfer(tx) {
                 Some(transfer) => {
-                    if active_addresses.contains(&transfer.to)
-                        && transfer.value >= state.orders.get(&transfer.to).unwrap().min_deposit
-                    {
-                        state.orders.get_mut(&transfer.to).unwrap().inflow += transfer.value;
-                    }
+                    let Some(order_id) = active_addresses.get(&transfer.to) else {
+                        continue;
+                    };
+
+                    state.orders.get_mut(order_id).unwrap().inflow += transfer.value;
                 }
                 None => {
                     let Some(vote_tx) = protobuf::parse_vote_tx(tx) else {

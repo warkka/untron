@@ -7,7 +7,7 @@ use sp1_zkvm::io::{commit_slice, read, read_vec};
 use untron_circuit::{crypto, stf, Execution, State};
 
 type UntronOutput = sol! {
-    tuple(bytes32,bytes32,uint64,bytes32,bytes32,bytes32,bytes32,(address,uint64)[])
+    tuple(bytes32,bytes32,uint64,bytes32,bytes32,bytes32,bytes32,(bytes32,uint64)[])
 };
 
 pub fn main() {
