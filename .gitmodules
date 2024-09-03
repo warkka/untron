@@ -21,12 +21,7 @@
 [submodule "contracts/lib/accounts"]
 	path = contracts/lib/accounts
 	url = https://github.com/ultrasoundlabs/Accounts
-[submodule "lib/v2-testnet-contracts"]
-	path = lib/v2-testnet-contracts
-	url = https://github.com/matter-labs/v2-testnet-contracts
-	branch = beta
 [submodule "contracts/lib/v2-testnet-contracts"]
 	path = contracts/lib/v2-testnet-contracts
 	url = https://github.com/matter-labs/v2-testnet-contracts
-[submodule "/contracts/lib/v2-testnet-contracts"]
 	branch = beta

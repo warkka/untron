@@ -14,7 +14,7 @@ import "./UntronZK.sol";
 /// @author Ultrasound Labs
 /// @notice This contract is the main entry point for implementation of the Untron protocol.
 ///         It's designed to be fully upgradeable and modular, with each module being a separate contract.
-contract UntronCore is IUntronCore, Initializable, UntronTransfers, UntronFees, UntronZK, UUPSUpgradeable {
+contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUntronCore, UUPSUpgradeable {
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -39,7 +39,7 @@ contract UntronCore is IUntronCore, Initializable, UntronTransfers, UntronFees, 
         __UntronTransfers_init(_spokePool, _usdt, _swapper);
 
         // initialize UntronFees
-        __UntronFees_init();
+        __UntronFees_init(100, 10000); // 0.01% relayer fee, 0.01 USDT fee point
 
         // initialize UntronZK
         __UntronZK_init();
@@ -110,7 +110,14 @@ contract UntronCore is IUntronCore, Initializable, UntronTransfers, UntronFees, 
         // set the receiver as busy to prevent double orders
         isReceiverBusy[receiver] = orderId;
         // store the order details in storage
-        orders[orderId] = Order({creator: creator, provider: provider, size: size, rate: rate, transfer: transfer});
+        orders[orderId] = Order({
+            creator: creator,
+            provider: provider,
+            receiver: receiver,
+            size: size,
+            rate: rate,
+            transfer: transfer
+        });
 
         // Emit OrderCreated event
         emit OrderCreated(orderId, creator, provider, receiver, size, rate);

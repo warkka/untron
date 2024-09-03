@@ -14,6 +14,8 @@ interface IUntronCore is IUntronTransfers, IUntronState {
         address creator;
         // the liquidity provider of the order (will receive USDT Tron in exchange for their USDT L2)
         address provider;
+        // the provider's receiver of the order (will receive USDT Tron)
+        address receiver;
         // the size of the order (in USDT Tron)
         uint256 size;
         // the rate of the order (in USDT L2 per 1 USDT Tron)
