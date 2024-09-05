@@ -306,7 +306,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
 
     /// @notice The role for the relayers.
     /// @dev Relayer is a role that is responsible for closing the orders.
-    ///      They generate and verify ZK proofs for Tron blockchain and its contents, in exchange for a fee (in percents; see relayerFee in UntronState).
+    ///      They generate and publish ZK proofs for Tron blockchain and its contents, in exchange for a fee (in percents; see relayerFee in UntronState).
     ///      If all relayers are down for more than 3 hours, relaying becomes permissionless (see lastRelayerActivity).
     bytes32 public constant RELAYER_ROLE = keccak256("RELAYER_ROLE");
 
