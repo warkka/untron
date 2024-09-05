@@ -31,6 +31,10 @@ contract UntronCoreTest is Test {
     address receiver = address(4);
     address fulfiller = address(5);
 
+    constructor() {
+        vm.warp(1725527575); // the time i did this test at
+    }
+
     function setUp() public {
         vm.startPrank(admin);
 
@@ -126,20 +130,25 @@ contract UntronCoreTest is Test {
 
         // Fulfill order
         vm.startPrank(fulfiller);
-        usdt.mint(fulfiller, 500e6);
-        usdt.approve(address(untron), 500e6);
 
         address[] memory receivers = new address[](1);
         receivers[0] = receiver;
 
-        untron.fulfill(receivers, 500e6);
+        (uint256 expense, uint256 profit) = untron.calculateFulfillerTotal(receivers);
+        console.log("expense", expense);
+        console.log("profit", profit);
+
+        usdt.mint(fulfiller, expense);
+        usdt.approve(address(untron), expense);
+
+        untron.fulfill(receivers, expense);
         vm.stopPrank();
 
         // Check order status
         assertEq(untron.isReceiverBusy(receiver), bytes32(0));
 
         // Check USDT balances
-        assertEq(usdt.balanceOf(user), 500e6);
+        assertEq(usdt.balanceOf(user), expense);
         assertEq(usdt.balanceOf(fulfiller), 0);
 
         return orderId;
@@ -167,8 +176,18 @@ contract UntronCoreTest is Test {
             closedOrders // closedOrders
         );
 
-        untron.closeOrders("", publicValues);
+        bytes memory proof = new bytes(0);
+
+        console.logBytes32(untron.blockId());
+        console.logBytes32(untron.latestClosedOrder());
+        console.logBytes32(untron.stateHash());
+
+        untron.closeOrders(proof, publicValues);
         vm.stopPrank();
+
+        console.logBytes32(untron.blockId());
+        console.logBytes32(untron.latestClosedOrder());
+        console.logBytes32(untron.stateHash());
 
         // Check state updates
         assertEq(untron.blockId(), bytes32(uint256(1)));
