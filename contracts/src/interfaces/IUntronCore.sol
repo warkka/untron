@@ -68,4 +68,9 @@ interface IUntronCore is IUntronTransfers, IUntronState {
     event ProviderUpdated(
         address indexed provider, uint256 liquidity, uint256 rate, uint256 minOrderSize, uint256 minDeposit
     );
+
+    function providers(address provider) external view returns (Provider memory);
+    function isReceiverBusy(address receiver) external view returns (bytes32);
+    function receiverOwners(address receiver) external view returns (address);
+    function orders(bytes32 orderId) external view returns (Order memory);
 }

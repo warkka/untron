@@ -3,3 +3,4 @@
 @openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
 @matterlabs/zksync-contracts/=lib/v2-testnet-contracts/
 @ultrasoundlabs/accounts/=lib/accounts/
+forge-std/=lib/forge-std/src/

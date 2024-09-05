@@ -47,19 +47,23 @@ abstract contract UntronFees is UntronTools, Initializable, UntronState {
     /// @param size The size of the transfer in USDT Tron.
     /// @param rate The rate of the order.
     /// @param fixedFee The fixed fee for the transfer (normally taken by the fulfiller).
+    /// @param includeRelayerFee Whether to include the relayer fee in the conversion.
     /// @return value The value of the transfer in USDT L2.
     /// @return fee The fee for the transfer in USDT L2.
-    function conversion(uint256 size, uint256 rate, uint256 fixedFee)
+    function conversion(uint256 size, uint256 rate, uint256 fixedFee, bool includeRelayerFee)
         internal
         view
         returns (uint256 value, uint256 fee)
     {
         // convert size into USDT L2 based on the rate
         uint256 out = (size * rate / bp);
-        // subtract relayer fee from the converted size
-        value = out * (bp - relayerFee) / bp;
-        // and write the fee to the fee variable
-        fee = out - value;
+        // if the relayer fee is included, subtract it from the converted size
+        if (includeRelayerFee) {
+            // subtract relayer fee from the converted size
+            value = out * (bp - relayerFee) / bp;
+            // and write the fee to the fee variable
+            fee = out - value;
+        }
         // subtract fixed fee from the output value
         value -= fixedFee;
     }

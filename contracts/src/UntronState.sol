@@ -26,10 +26,10 @@ abstract contract UntronState is Initializable, AccessControlUpgradeable, Accoun
     }
 
     // UntronCore variables
-    bytes32 internal blockId;
-    bytes32 internal latestOrder;
-    bytes32 internal latestClosedOrder;
-    bytes32 internal stateHash;
+    bytes32 public blockId;
+    bytes32 public latestOrder;
+    bytes32 public latestClosedOrder;
+    bytes32 public stateHash;
 
     /// @inheritdoc IUntronState
     function setUntronCoreVariables(
@@ -45,8 +45,8 @@ abstract contract UntronState is Initializable, AccessControlUpgradeable, Accoun
     }
 
     // UntronZK variables
-    address internal verifier;
-    bytes32 internal vkey;
+    address public verifier;
+    bytes32 public vkey;
 
     /// @inheritdoc IUntronState
     function setUntronZKVariables(address _verifier, bytes32 _vkey) external override onlyRole(UPGRADER_ROLE) {
@@ -55,9 +55,8 @@ abstract contract UntronState is Initializable, AccessControlUpgradeable, Accoun
     }
 
     // UntronFees variables
-    /// @inheritdoc IUntronState
-    uint256 public override relayerFee; // percents
-    uint256 internal feePoint; // approx fee per ERC20 transfer in USD
+    uint256 public relayerFee; // percents
+    uint256 public feePoint; // approx fee per ERC20 transfer in USD
 
     /// @inheritdoc IUntronState
     function setUntronFeesVariables(uint256 _relayerFee, uint256 _feePoint) external override onlyRole(UPGRADER_ROLE) {
@@ -66,9 +65,9 @@ abstract contract UntronState is Initializable, AccessControlUpgradeable, Accoun
     }
 
     // UntronTransfers variables
-    address internal usdt;
-    address internal spokePool;
-    address internal swapper;
+    address public usdt;
+    address public spokePool;
+    address public swapper;
 
     /// @inheritdoc IUntronState
     function setUntronTransfersVariables(address _usdt, address _spokePool, address _swapper)
@@ -82,8 +81,8 @@ abstract contract UntronState is Initializable, AccessControlUpgradeable, Accoun
     }
 
     // Accounts variables
-    uint256 internal rate;
-    uint256 internal per;
+    uint256 public rate;
+    uint256 public per;
 
     /// @notice Changes the rate and period of rate-limited calls with no checks
     /// @param _rate The rate of rate-limited calls
