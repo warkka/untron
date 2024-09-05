@@ -242,7 +242,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     /// @param total The total amount of USDT L2 to transfer.
     /// @dev Fulfillment exists because ZK proofs that actually *close* the orders
     ///      are published every 60-90 minutes. This means that provider's funds
-    ///      will only be unlocked to them or to the users with this delay.
+    ///      will only be unlocked to them or to order creators with this delay.
     ///      However, we want the users to receive the funds ASAP.
     ///      Fulfillers send users' ask in advance when they see that their USDT
     ///      transfer happened on Tron blockchain, but wasn't ZK proven yet.
