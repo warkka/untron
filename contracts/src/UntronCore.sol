@@ -283,7 +283,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
             // fulfiller will always receive provider's USDT L2 on the contract host chain (ZKsync Era),
             // as opposed to user's transfer that could be on any chain
             orders[activeOrderId].transfer.chainId = chainId();
-            // fulfilled orders don't need swaps, because the fulfillers will always USDT L2 on the host chain.
+            // fulfilled orders don't need swaps, because the fulfillers will always receive USDT L2 on the host chain.
             orders[activeOrderId].transfer.doSwap = false;
             // make the receiver not busy anymore
             delete isReceiverBusy[_receivers[i]];
