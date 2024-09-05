@@ -6,7 +6,7 @@ edition = "2021"
 
 [dependencies]
 sp1-sdk = "1.1.0"
-untron-circuit = { path = "../circuit" }
+untron-program = { path = "../program" }
 tonic = { version = "0.12.1", features = ["prost"] }
 prost = "0.13.1"
 prost-types = "0.13.1"
