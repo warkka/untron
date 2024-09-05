@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
+// import "forge-std/console.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
@@ -349,7 +350,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         // verify the ZK proof with the public values
         // verifying logic is defined in the UntronZK contract.
         // currently it wraps SP1 zkVM verifier.
-        verifyProof(publicValues, proof);
+        verifyProof(proof, publicValues);
 
         (
             // old block ID must be the latest block ID that was ZK proven (blockId)

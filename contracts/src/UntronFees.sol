@@ -63,6 +63,9 @@ abstract contract UntronFees is UntronTools, Initializable, UntronState {
             value = out * (bp - relayerFee) / bp;
             // and write the fee to the fee variable
             fee = out - value;
+        } else {
+            // if the relayer fee is not included, the value is just converted size (size * rate)
+            value = out;
         }
         // subtract fixed fee from the output value
         value -= fixedFee;
