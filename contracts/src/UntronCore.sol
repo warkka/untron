@@ -131,7 +131,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     /// @param rate The "USDT L2 per 1 USDT Tron" rate of the order.
     /// @param transfer The transfer details.
     ///                 They'll be used in the fulfill or closeOrders functions to send respective
-    ///                 USDT L2 to the user or convert them into to whatever the user wants to receive
+    ///                 USDT L2 to the user or convert them into whatever the user wants to receive
     ///                 for their USDT Tron.
     /// @dev The function is rate-limited based on limits specified in UntronState.
     function createOrder(address provider, address receiver, uint256 size, uint256 rate, Transfer calldata transfer)
