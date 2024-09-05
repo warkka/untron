@@ -214,7 +214,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     /// @param _receivers The addresses of the receivers.
     /// @return totalExpense The total expense in USDT L2.
     /// @return totalProfit The total profit in USDT L2.
-    function calculateTotal(address[] calldata _receivers)
+    function calculateFulfillerTotal(address[] calldata _receivers)
         external
         view
         returns (uint256 totalExpense, uint256 totalProfit)
