@@ -21,10 +21,10 @@ abstract contract UntronTools {
     function unixToTron(uint256 _timestamp) internal pure returns (uint256) {
         // Tron uses god knows what format for timestamping
         // and this formula is an approximation.
-        // i only figured out that it's in 1/100th of second
-        // because timestamps in blocks differ by 300 and are created every 3 secs IRL.
+        // i only figured out that it's in milliseconds
+        // because timestamps in blocks differ by 3000 and are created every 3 secs IRL.
         // CALCULATION FOR THE SUBTRAHEND:
-        // blockheader(62913164).raw_data.timestamp - (tronscan(62913164).timestamp * 100)
-        return _timestamp * 100 - 170539755000;
+        // blockheader(62913164).raw_data.timestamp - (tronscan(62913164).timestamp * 1000)
+        return _timestamp * 1000 - 170539755000;
     }
 }
