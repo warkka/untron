@@ -315,6 +315,11 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
 
         // check that the total amount of USDT L2 sent is less or equal to the declared amount
         require(total >= supposedTotal, "Total does not match");
+
+        // refund the fulfiller for the USDT L2 that was sent in excess
+        if (supposedTotal < total) {
+            internalTransfer(msg.sender, total - supposedTotal);
+        }
     }
 
     /// @notice Mapping to store the timestamps of the orders.
