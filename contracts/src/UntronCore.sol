@@ -313,8 +313,8 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
             emit OrderFulfilled(activeOrderId, msg.sender);
         }
 
-        // check that the total amount of USDT L2 sent is equal to the declared amount
-        require(total == supposedTotal, "Total does not match");
+        // check that the total amount of USDT L2 sent is less or equal to the declared amount
+        require(total >= supposedTotal, "Total does not match");
     }
 
     /// @notice Mapping to store the timestamps of the orders.
