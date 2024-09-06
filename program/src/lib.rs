@@ -12,8 +12,12 @@ pub const ORDER_TTL: u64 = 100; // blocks
 // how often blocks in Tron blockchain are produced
 pub const BLOCK_TIME: u64 = 3000; // milliseconds
 
-// TODO: find any maintenance block to determine this
-pub const MAINTENANCE_PERIOD_BLOCK_OFFSET: u64 = 0;
+// proof: https://tronscan.org/#/block/64992129 and https://tronscan.org/#/block/64992130 timestamps differ by 9 secs
+pub const MAINTENANCE_PERIOD_BLOCK_OFFSET: u64 = 64992129;
+
+// how often maintenance period happens.
+// in docs it's 7200, but actually it's 7198 blocks because maintenance window skips two blocks
+pub const MAINTENANCE_PERIOD_RATE: u64 = 7198;
 
 // OrderChain is the format of the order data that's needed for the program, chained with the previous order
 pub type OrderChain = sol! {
@@ -244,7 +248,7 @@ pub fn stf(mut state: State, execution: Execution) -> (State, Vec<([u8; 32], u64
 
         // if the current block is a maintenance block (happens every 7200 blocks), we run the maintenance logic
         if (block_id_to_number(state.latest_block_id) + MAINTENANCE_PERIOD_BLOCK_OFFSET)
-            .rem_euclid(7200)
+            .rem_euclid(MAINTENANCE_PERIOD_RATE)
             == 0
         {
             // get all votes from the state and sort them by the vote count
