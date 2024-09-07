@@ -1,0 +1,12 @@
+[zksync]
+rpc = "https://mainnet.era.zksync.io"
+private_key = "0xb00ba"
+untron_contract_address = "0x0000000000000000000000000000000000000000"
+
+[tron]
+rpc = "https://api.trongrid.io/jsonrpc"
+
+[relay]
+proof_interval = 7200 # 2 hours
+min_orders_to_relay = 0
+mock = true
