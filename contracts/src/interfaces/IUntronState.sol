@@ -17,7 +17,8 @@ interface IUntronState {
         bytes32 _blockId,
         bytes32 _latestOrder,
         bytes32 _latestClosedOrder,
-        bytes32 _stateHash
+        bytes32 _stateHash,
+        uint256 _maxOrderSize
     ) external;
 
     /// @notice Updates the UntronZK-related variables

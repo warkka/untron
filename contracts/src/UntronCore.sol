@@ -89,8 +89,6 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         orderId = sha256(abi.encode(latestOrder, tronTimestamp, receiver, minDeposit));
         // latestOrder stores the latest order ID, that is, the tip of the order chain.
         latestOrder = orderId;
-        // we store the order timestamp to prevent relayers from censoring orders in their batches.
-        orderTimestamps[orderId] = tronTimestamp;
     }
 
     /// @notice Creates an order with no checks.
@@ -123,6 +121,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         require(_providers[provider].liquidity >= amount, "Provider does not have enough liquidity");
         require(rate == _providers[provider].rate, "Rate does not match provider's rate");
         require(_providers[provider].minDeposit <= size, "Min deposit is greater than size");
+        require(size <= maxOrderSize, "Size is greater than max order size");
         // subtract the amount from the provider's liquidity
         _providers[provider].liquidity -= amount;
 
@@ -135,11 +134,13 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         // store the order details in storage
         _orders[orderId] = Order({
             prevOrder: prevOrder,
+            timestamp: unixToTron(block.timestamp),
             creator: creator,
             provider: provider,
             receiver: receiver,
             size: size,
             rate: rate,
+            minDeposit: _providers[provider].minDeposit,
             transfer: transfer
         });
 
@@ -325,10 +326,6 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         }
     }
 
-    /// @notice Mapping to store the timestamps of the orders.
-    /// @dev The timestamps are needed to force the relayer to ZK prove all orders respective to their blocks.
-    mapping(bytes32 => uint256) internal orderTimestamps; // order ID -> timestamp
-
     /// @notice The timestamp of the last relayer activity.
     /// @dev Used to make closing orders permissionless in case all relayers are down for more than 3 hours.
     uint256 public lastRelayerActivity;
@@ -390,7 +387,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         // require that the timestamp of the latest closed order is greater than or equal
         // to the timestamp of the new latest (known) block of Tron blockchain.
         // this is needed to prevent the relayer from censoring orders until they expire.
-        require(orderTimestamps[newLatestClosedOrder] >= newTimestamp);
+        require(_orders[newLatestClosedOrder].timestamp >= newTimestamp);
         // check that the old state hash is equal to the current state hash
         // this is needed to prevent the relayer from modifying the state in the ZK program.
         require(oldStateHash == stateHash);

@@ -12,6 +12,8 @@ interface IUntronCore is IUntronTransfers, IUntronState {
     struct Order {
         // the ID of the previous order
         bytes32 prevOrder;
+        // the timestamp of the order
+        uint256 timestamp;
         // the creator of the order (will send USDT Tron)
         address creator;
         // the liquidity provider of the order (will receive USDT Tron in exchange for their USDT L2)
@@ -23,6 +25,8 @@ interface IUntronCore is IUntronTransfers, IUntronState {
         // the rate of the order (in USDT L2 per 1 USDT Tron)
         // divided by 1e6 (see "bp" in UntronFees.sol)
         uint256 rate;
+        // the minimum deposit in USDT Tron
+        uint256 minDeposit;
         // the transfer details for the order.
         // It can be as simple as a direct USDT L2 (zksync) transfer to the recipient,
         // or it can be a more complex transfer such as a 1inch swap of USDT L2 (zksync) to the other coin,
