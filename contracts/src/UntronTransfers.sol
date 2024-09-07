@@ -100,7 +100,8 @@ abstract contract UntronTransfers is IUntronTransfers, UntronTools, Initializabl
             // if the transfer requires a fixed output amount,
             // we take the excessive amount and add it to the leftovers
             if (transfer.fixedOutput) {
-                amount = transfer.minOutputPerUSDT * amount / 1e6;
+                amount = transfer.minOutputPerUSDT * amount / 1e6 + transfer.acrossFee;
+                require(output >= amount, "Insufficient output amount");
                 leftovers += output - amount;
             } else {
                 // if the transfer doesn't require a fixed output amount,

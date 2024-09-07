@@ -10,6 +10,8 @@ import "./IUntronState.sol";
 interface IUntronCore is IUntronTransfers, IUntronState {
     /// @notice Struct representing a Tron->L2 order in the Untron protocol
     struct Order {
+        // the ID of the previous order
+        bytes32 prevOrder;
         // the creator of the order (will send USDT Tron)
         address creator;
         // the liquidity provider of the order (will receive USDT Tron in exchange for their USDT L2)

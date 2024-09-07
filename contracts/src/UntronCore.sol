@@ -126,12 +126,15 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         // subtract the amount from the provider's liquidity
         _providers[provider].liquidity -= amount;
 
+        // get the previous order ID
+        bytes32 prevOrder = latestOrder;
         // create the order ID and update the order chain
         bytes32 orderId = updateOrderChain(receiver, _providers[provider].minDeposit);
         // set the receiver as busy to prevent double orders
         _isReceiverBusy[receiver] = orderId;
         // store the order details in storage
         _orders[orderId] = Order({
+            prevOrder: prevOrder,
             creator: creator,
             provider: provider,
             receiver: receiver,
@@ -415,6 +418,10 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
             (uint256 amount, uint256 fee) = conversion(minInflow, _orders[orderId].rate, 0, true);
             // add the fee to the total fee
             totalFee += fee;
+
+            // remove fixed output flag to make the transfer unrevertable
+            // (if the user hadn't changed the transfer details by that time it's their fault tbh)
+            _orders[orderId].transfer.fixedOutput = false;
 
             // perform the transfer
             smartTransfer(_orders[orderId].transfer, amount);
