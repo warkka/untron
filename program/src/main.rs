@@ -2,7 +2,7 @@
 sp1_zkvm::entrypoint!(main);
 
 use alloy_sol_types::{sol, SolType};
-use sp1_zkvm::io::{commit_slice, read, read_vec};
+use sp1_zkvm::io::{commit_slice, read_vec};
 
 use untron_program::{crypto, stf, Execution, State};
 
@@ -31,17 +31,11 @@ pub fn main() {
 
     // read the execution payload from stdin
     // INPUT FORMAT:
-    // - orders_count: u32
-    // - orders: Vec<u8> (bincode serialized Order) orders_count times
-    // - blocks_count: u32
-    // - blocks: Vec<u8> (bincode serialized RawBlock) blocks_count times
+    // - orders: Vec<u8> (bincode serialized Vec<Order>)
+    // - blocks: Vec<u8> (bincode serialized Vec<RawBlock>)
     let execution = Execution {
-        orders: (0..read::<u32>())
-            .map(|_| bincode::deserialize(&read_vec()).unwrap())
-            .collect(),
-        blocks: (0..read::<u32>())
-            .map(|_| bincode::deserialize(&read_vec()).unwrap())
-            .collect(),
+        orders: bincode::deserialize(&read_vec()).unwrap(),
+        blocks: bincode::deserialize(&read_vec()).unwrap(),
     };
 
     // get the latest known Tron blockchain's block id and Untron's order chain (chained hash of all orders)
