@@ -105,7 +105,7 @@ pub fn block_id_to_number(block_id: [u8; 32]) -> u64 {
 // stf is the state transition function for the Untron program.
 // it takes the current state and an execution
 // and returns the new state and the closed orders, then passed to the smart contract.
-pub fn stf(mut state: State, execution: Execution) -> (State, Vec<([u8; 32], u64)>) {
+pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], u64)> {
     // iterate over all new orders to form the new order chain
     for order in execution.orders {
         // encode the order into the chained ABI format
@@ -246,13 +246,13 @@ pub fn stf(mut state: State, execution: Execution) -> (State, Vec<([u8; 32], u64
 
         // maintenance period logic
 
-        // if the current block is a maintenance block (happens every 7200 blocks), we run the maintenance logic
+        // if the current block is a maintenance block, we run the maintenance logic
         if (block_id_to_number(state.latest_block_id) + MAINTENANCE_PERIOD_BLOCK_OFFSET)
             .rem_euclid(MAINTENANCE_PERIOD_RATE)
             == 0
         {
             // get all votes from the state and sort them by the vote count
-            let mut votes: Vec<([u8; 20], u64)> = state.votes.into_iter().collect();
+            let mut votes: Vec<([u8; 20], u64)> = state.votes.clone().into_iter().collect();
             // sort the votes by the vote count
             votes.sort_by(|a, b| a.1.cmp(&b.1));
             // get the top 27 addresses (SR candidates)
@@ -268,6 +268,6 @@ pub fn stf(mut state: State, execution: Execution) -> (State, Vec<([u8; 32], u64
         }
     }
 
-    // return the new state and the closed orders
-    (state, closed_orders)
+    // return the closed orders
+    closed_orders
 }

@@ -27,7 +27,7 @@ pub fn main() {
     // compute the old state hash
     let old_state_hash = crypto::hash(&serialized_state);
     // deserialize the state thru bincode
-    let state: State = bincode::deserialize(&serialized_state).unwrap();
+    let mut state: State = bincode::deserialize(&serialized_state).unwrap();
 
     // read the execution payload from stdin
     // INPUT FORMAT:
@@ -49,7 +49,7 @@ pub fn main() {
     let old_order_chain = state.order_chain;
 
     // perform execution over the state through the state transition function (see lib.rs for details)
-    let (state, closed_orders) = stf(state, execution);
+    let closed_orders = stf(&mut state, execution);
 
     // compute the new state hash
     let new_state_hash = crypto::hash(&bincode::serialize(&state).unwrap());
