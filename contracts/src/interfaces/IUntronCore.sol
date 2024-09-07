@@ -64,7 +64,14 @@ interface IUntronCore is IUntronTransfers, IUntronState {
     }
 
     event OrderCreated(
-        bytes32 orderId, address creator, address indexed provider, address receiver, uint256 size, uint256 rate
+        bytes32 orderId,
+        uint256 timestamp,
+        address creator,
+        address indexed provider,
+        address receiver,
+        uint256 size,
+        uint256 rate,
+        uint256 minDeposit
     );
     event OrderChanged(bytes32 orderId);
     event OrderStopped(bytes32 orderId);

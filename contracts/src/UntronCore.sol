@@ -131,10 +131,11 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         bytes32 orderId = updateOrderChain(receiver, _providers[provider].minDeposit);
         // set the receiver as busy to prevent double orders
         _isReceiverBusy[receiver] = orderId;
+        uint256 timestamp = unixToTron(block.timestamp);
         // store the order details in storage
         _orders[orderId] = Order({
             prevOrder: prevOrder,
-            timestamp: unixToTron(block.timestamp),
+            timestamp: timestamp,
             creator: creator,
             provider: provider,
             receiver: receiver,
@@ -145,7 +146,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         });
 
         // Emit OrderCreated event
-        emit OrderCreated(orderId, creator, provider, receiver, size, rate);
+        emit OrderCreated(orderId, timestamp, creator, provider, receiver, size, rate, _providers[provider].minDeposit);
     }
 
     /// @notice Rate-limited order creation function
