@@ -12,12 +12,13 @@ pub const ORDER_TTL: u64 = 100; // blocks
 // how often blocks in Tron blockchain are produced
 pub const BLOCK_TIME: u64 = 3000; // milliseconds
 
-// proof: https://tronscan.org/#/block/64992129 and https://tronscan.org/#/block/64992130 timestamps differ by 9 secs
-pub const MAINTENANCE_PERIOD_BLOCK_OFFSET: u64 = 64992129;
+// proof: https://tronscan.org/#/block/64992129 and https://tronscan.org/#/block/64992130 timestamps differ by 9 secs.
+// 64992129 - (64992129 // 7198 * 7198) = 1387
+pub const MAINTENANCE_PERIOD_BLOCK_OFFSET: u32 = 1387;
 
 // how often maintenance period happens.
 // in docs it's 7200, but actually it's 7198 blocks because maintenance window skips two blocks
-pub const MAINTENANCE_PERIOD_RATE: u64 = 7198;
+pub const MAINTENANCE_PERIOD_INTERVAL: u32 = 7198;
 
 // OrderChain is the format of the order data that's needed for the program, chained with the previous order
 pub type OrderChain = sol! {
@@ -96,10 +97,11 @@ pub struct Execution {
 
 // block_id_to_number is a helper function to convert a block id to a block number
 // in Tron, block id is a sha256 hash of the block header with first 8 bytes set to the block number in big endian.
-pub fn block_id_to_number(block_id: [u8; 32]) -> u64 {
-    let mut block_number = [0u8; 8];
-    block_number.copy_from_slice(&block_id[..8]);
-    u64::from_be_bytes(block_number)
+// however, to save some cycles, we'll use u32 for the block number
+pub fn block_id_to_number(block_id: [u8; 32]) -> u32 {
+    let mut block_number = [0u8; 4];
+    block_number.copy_from_slice(&block_id[4..8]);
+    u32::from_be_bytes(block_number)
 }
 
 // stf is the state transition function for the Untron program.
@@ -136,6 +138,9 @@ pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], u64)> {
     let mut active_addresses: HashMap<[u8; 20], [u8; 32]> = HashMap::new();
     // count of the blocks to process (needed to skip the contents of the last 19 blocks to ensure Tron's finality)
     let block_count = execution.blocks.len();
+
+    // for simplicity of relayer implementation, we need at least 100 blocks to be processed
+    assert!(block_count as u64 > ORDER_TTL);
 
     // iterate over all new blocks
     for (i, block) in execution.blocks.into_iter().enumerate() {
@@ -247,8 +252,8 @@ pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], u64)> {
         // maintenance period logic
 
         // if the current block is a maintenance block, we run the maintenance logic
-        if (block_id_to_number(state.latest_block_id) + MAINTENANCE_PERIOD_BLOCK_OFFSET)
-            .rem_euclid(MAINTENANCE_PERIOD_RATE)
+        if (block_id_to_number(state.latest_block_id) - MAINTENANCE_PERIOD_BLOCK_OFFSET)
+            .rem_euclid(MAINTENANCE_PERIOD_INTERVAL)
             == 0
         {
             // get all votes from the state and sort them by the vote count
