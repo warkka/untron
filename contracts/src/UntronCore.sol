@@ -115,20 +115,22 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         // amount is the amount of USDT L2 that will be taken from the provider
         // based on the order size (which is in USDT Tron) and provider's rate
         (uint256 amount,) = conversion(size, rate, 0, false);
+        uint256 providerMinDeposit = _providers[provider].minDeposit;
 
         require(_isReceiverBusy[receiver] == bytes32(0), "Receiver is busy");
         require(_receiverOwners[receiver] == provider, "Receiver is not owned by provider");
         require(_providers[provider].liquidity >= amount, "Provider does not have enough liquidity");
         require(rate == _providers[provider].rate, "Rate does not match provider's rate");
-        require(_providers[provider].minDeposit <= size, "Min deposit is greater than size");
+        require(providerMinDeposit <= size, "Min deposit is greater than size");
         require(size <= maxOrderSize, "Size is greater than max order size");
+
         // subtract the amount from the provider's liquidity
         _providers[provider].liquidity -= amount;
 
         // get the previous order ID
         bytes32 prevOrder = latestOrder;
         // create the order ID and update the order chain
-        bytes32 orderId = updateOrderChain(receiver, _providers[provider].minDeposit);
+        bytes32 orderId = updateOrderChain(receiver, providerMinDeposit);
         // set the receiver as busy to prevent double orders
         _isReceiverBusy[receiver] = orderId;
         uint256 timestamp = unixToTron(block.timestamp);
@@ -141,12 +143,12 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
             receiver: receiver,
             size: size,
             rate: rate,
-            minDeposit: _providers[provider].minDeposit,
+            minDeposit: providerMinDeposit,
             transfer: transfer
         });
 
         // Emit OrderCreated event
-        emit OrderCreated(orderId, timestamp, creator, provider, receiver, size, rate, _providers[provider].minDeposit);
+        emit OrderCreated(orderId, timestamp, creator, provider, receiver, size, rate, providerMinDeposit);
     }
 
     /// @notice Rate-limited order creation function
@@ -162,7 +164,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     /// @dev The function is rate-limited based on limits specified in UntronState.
     function createOrder(address provider, address receiver, uint256 size, uint256 rate, Transfer calldata transfer)
         external
-        ratePer(rate, per, true)
+        ratePer(maxSponsorships, per, true)
     {
         // proceed with order creation (rate limiting is done in the modifier)
         _createOrder(msg.sender, provider, receiver, size, rate, transfer);
@@ -225,15 +227,30 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         updateOrderChain(_orders[orderId].receiver, 0);
         // set the receiver as not busy because the order is stopped
         _isReceiverBusy[_orders[orderId].receiver] = bytes32(0);
-        // delete the order because it won't be fulfilled/closed
-        // (stopOrder assumes that the user sent nothing)
-        delete _orders[orderId];
 
         // return the liquidity back to the provider
         _providers[_orders[orderId].provider].liquidity += _orders[orderId].size;
 
+        // delete the order because it won't be fulfilled/closed
+        // (stopOrder assumes that the user sent nothing)
+        delete _orders[orderId];
+
         // Emit OrderStopped event
         emit OrderStopped(orderId);
+    }
+
+    function _getAmountAndFee(Order memory order) internal view returns (uint256 amount, uint256 fee) {
+        // calculate the fulfiller fee given the order details
+        fee = calculateFee(order.transfer.doSwap, order.transfer.chainId);
+        // calculate the amount of USDT L2 that the fulfiller will have to send
+        (amount,) = conversion(order.size, order.rate, fee, true);
+    }
+
+    function _getActiveOrderByReceiver(address receiver) internal view returns (Order memory) {
+        // get the active order ID for the receiver
+        bytes32 activeOrderId = _isReceiverBusy[receiver];
+        // get the order details
+        return _orders[activeOrderId];
     }
 
     /// @notice Helper function that calculates the fulfiller's total expense and income given the receivers.
@@ -247,15 +264,8 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     {
         // iterate over the receivers
         for (uint256 i = 0; i < _receivers.length; i++) {
-            // get the active order ID for the receiver
-            bytes32 activeOrderId = _isReceiverBusy[_receivers[i]];
-            // get the order details
-            Order memory order = _orders[activeOrderId];
-
-            // calculate the fulfiller fee given the order details
-            uint256 fulfillerFee = calculateFee(order.transfer.doSwap, order.transfer.chainId);
-            // calculate the amount of USDT L2 that the fulfiller will have to send
-            (uint256 amount,) = conversion(order.size, order.rate, fulfillerFee, true);
+            Order memory order = _getActiveOrderByReceiver(_receivers[i]);
+            (uint256 amount, uint256 fulfillerFee) = _getAmountAndFee(order);
 
             // add the amount to the total expense and the fee to the total profit
             totalExpense += amount;
@@ -281,21 +291,20 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         internalTransferFrom(msg.sender, total);
         // this variable will be used to calculate how much the contract sent to the users.
         // this number must be equal to "total" to prevent the fulfiller from stealing the funds in the contract.
-        uint256 supposedTotal;
+        uint256 expectedTotal;
 
         // iterate over the receivers
         for (uint256 i = 0; i < _receivers.length; i++) {
-            // get the active order ID for the receiver
+            // get the order ID
             bytes32 activeOrderId = _isReceiverBusy[_receivers[i]];
-            // get the order details
-            Order memory order = _orders[activeOrderId];
 
-            // calculate the fulfiller fee given the order details
-            uint256 fulfillerFee = calculateFee(order.transfer.doSwap, order.transfer.chainId);
-            // calculate the amount of USDT L2 that the fulfiller will have to send
-            (uint256 amount,) = conversion(order.size, order.rate, fulfillerFee, true);
+            // get the active order ID for the receiver
+            Order memory order = _orders[activeOrderId];
+            
+            (uint256 amount,) = _getAmountAndFee(order);
+
             // account for the spent amount in our accounting variable
-            supposedTotal += amount;
+            expectedTotal += amount;
 
             // perform the transfer
             smartTransfer(order.transfer, amount);
@@ -319,11 +328,11 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         }
 
         // check that the total amount of USDT L2 sent is less or equal to the declared amount
-        require(total >= supposedTotal, "Total does not match");
+        require(total >= expectedTotal, "Total does not match");
 
         // refund the fulfiller for the USDT L2 that was sent in excess
-        if (supposedTotal < total) {
-            internalTransfer(msg.sender, total - supposedTotal);
+        if (expectedTotal < total) {
+            internalTransfer(msg.sender, total - expectedTotal);
         }
     }
 

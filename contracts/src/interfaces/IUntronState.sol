@@ -41,7 +41,7 @@ interface IUntronState {
     function setUntronTransfersVariables(address _usdt, address _spokePool, address _swapper) external;
 
     /// @notice Changes the rate and period of rate-limited calls
-    /// @param _rate The rate of rate-limited calls
+    /// @param _maxSponsorships The _maxSponsorships of rate-limited calls
     /// @param _per The period of rate-limited calls
-    function changeRateLimit(uint256 _rate, uint256 _per) external;
+    function changeRateLimit(uint256 _maxSponsorships, uint256 _per) external;
 }
