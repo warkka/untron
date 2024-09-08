@@ -1,3 +1,4 @@
+use sp1_build::{build_program_with_args, BuildArgs};
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -17,6 +18,10 @@ fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> 
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    println!(
+        "Building Tron protocol... If it fails, make sure you initialized submodules in this repo."
+    );
+
     copy_dir_all(
         Path::new("../lib/googleapis/google"),
         Path::new("../lib/java-tron/protocol/src/main/protos/google"),
@@ -29,5 +34,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &["../lib/java-tron/protocol/src/main/protos"],
         )?;
     fs::remove_dir_all("../lib/java-tron/protocol/src/main/protos/google")?;
+
+    println!("Building ZK program, make sure Docker is running...");
+
+    let args = BuildArgs {
+        docker: true,
+        output_directory: "./elf".to_string(),
+        ..Default::default()
+    };
+    build_program_with_args("../program", args);
     Ok(())
 }

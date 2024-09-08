@@ -7,7 +7,7 @@
     "test": "test"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "forge test -vvv --zksync"
   },
   "repository": {
     "type": "git",
@@ -15,8 +15,7 @@
     "directory": "contracts"
   },
   "files": [
-    "src/interfaces/*.sol",
-    "README.md"
+    "**/*"
   ],
   "keywords": [
     "untron",
@@ -35,5 +34,9 @@
   "bugs": {
     "url": "https://github.com/ultrasoundlabs/untron/issues"
   },
-  "homepage": "https://github.com/ultrasoundlabs/untron#readme"
+  "homepage": "https://github.com/ultrasoundlabs/untron#readme",
+  "dependencies": {
+    "ethers": "^6.13.2",
+    "zksync-ethers": "^6.12.0"
+  }
 }
