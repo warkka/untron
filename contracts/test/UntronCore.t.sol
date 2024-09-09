@@ -188,6 +188,40 @@ contract UntronCoreTest is Test {
         return orderId;
     }
 
+    function test_createOrder_RevertIf_NotEnoughProviderLiquidity() public {
+        // Given
+        // Set up provider
+        vm.startPrank(provider);
+        usdt.mint(provider, 1000e6);
+        usdt.approve(address(untron), 1000e6);
+
+        address[] memory receivers = new address[](1);
+        receivers[0] = receiver;
+
+        untron.setProvider(1000e6, 1e6, 500e6, 100e6, receivers);
+        vm.stopPrank();
+
+        // When
+        // Try to create order with not enough USDT
+        vm.startPrank(user);
+        UntronCore.Transfer memory transfer = IUntronTransfers.Transfer({
+            recipient: user,
+            chainId: block.chainid,
+            acrossFee: 0,
+            doSwap: false,
+            outToken: address(0),
+            minOutputPerUSDT: 0,
+            fixedOutput: false,
+            swapData: ""
+        });
+
+        vm.expectRevert();
+        untron.createOrder(provider, receiver, 1001e6, 1e6, transfer);
+
+        // Then
+        vm.stopPrank();
+    }
+
     function test_createOrder_RevertIf_UserIsRateLimited() public {
         // Given
 
@@ -847,9 +881,9 @@ contract UntronCoreTest is Test {
     }
 
     // TODO: Add missing tests for close orders fun and set provider
-    function test_closeOrders_CloseOrders() public {
+    function test_closeOrders_CloseOrdersWithRelayerRole() public returns (bytes32 orderId, bytes memory publicValues) {
         // Set up provider, create order, and fulfill order
-        bytes32 orderId = test_fulfill_FulfillOrderExactAmount();
+        orderId = test_fulfill_FulfillOrderExactAmount();
 
         // Close orders
         vm.startPrank(admin);
@@ -858,7 +892,7 @@ contract UntronCoreTest is Test {
         IUntronCore.Inflow[] memory closedOrders = new IUntronCore.Inflow[](1);
         closedOrders[0] = IUntronCore.Inflow({order: orderId, inflow: 500e6});
 
-        bytes memory publicValues = abi.encode(
+        publicValues = abi.encode(
             bytes32(0), // oldBlockId
             bytes32(uint256(1)), // newBlockId
             block.timestamp - 1, // newTimestamp
@@ -886,6 +920,66 @@ contract UntronCoreTest is Test {
         //assertEq(untron.blockId(), bytes32(uint256(1)));
         //assertEq(untron.latestClosedOrder(), orderId);
         //clearassertEq(untron.stateHash(), bytes32(uint256(1)));
+
+        return (orderId, publicValues);
+    }
+
+    function test_closeOrders_RevertIf_MsgSenderHasNoRelayerRoleAndInactivityPeriodNotSurpassed() public {
+        // Given
+        // Set up provider, create order, and fulfill order
+        test_fulfill_FulfillOrderExactAmount();
+
+        // Close order once to set a valid lastRelayerActivity
+        (bytes32 preOrderId, bytes memory prePublicValues) = test_closeOrders_CloseOrdersWithRelayerRole();
+        
+        // Set up provider, create order, and fulfill order
+        bytes32 orderId = test_fulfill_FulfillOrderExactAmount();
+
+        /*
+            bytes32(0), // oldBlockId
+            bytes32(uint256(1)), // newBlockId
+            block.timestamp - 1, // newTimestamp
+            bytes32(0), // oldLatestClosedOrder
+            orderId, // newLatestClosedOrder
+            bytes32(0), // oldStateHash
+            bytes32(uint256(1)), // newStateHash
+            closedOrders // closedOrders
+
+            Ensure that these conditions are met
+            require(oldBlockId == blockId);
+            require(oldLatestClosedOrder == latestClosedOrder);
+            require(oldStateHash == stateHash);
+            require(_orders[newLatestClosedOrder].timestamp >= newTimestamp);
+
+            blockId = newBlockId;
+            latestClosedOrder = newLatestClosedOrder;
+            stateHash = newStateHash;
+        */
+
+        // When
+        // Try to close orders again without relayer role
+        vm.startPrank(user);
+        IUntronCore.Inflow[] memory closedOrders = new IUntronCore.Inflow[](1);
+        closedOrders[0] = IUntronCore.Inflow({order: orderId, inflow: 500e6});
+
+        bytes memory publicValues = abi.encode(
+            bytes32(uint256(1)), // oldBlockId
+            bytes32(uint256(2)), // newBlockId
+            block.timestamp - 1, // newTimestamp
+            preOrderId, // oldLatestClosedOrder
+            orderId, // newLatestClosedOrder
+            bytes32(uint256(1)), // newStateHash
+            bytes32(uint256(2)), // oldStateHash
+            closedOrders // closedOrders
+        );
+
+        bytes memory proof = new bytes(0);
+
+        vm.expectRevert();
+        untron.closeOrders(proof, publicValues);
+
+        // Then
+        vm.stopPrank();
     }
 
     function test_setProvider_SetsLiquidityProviderDetails() public {
