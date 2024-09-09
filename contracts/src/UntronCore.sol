@@ -391,13 +391,13 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         ) = abi.decode(publicValues, (bytes32, bytes32, uint256, bytes32, bytes32, bytes32, bytes32, Inflow[]));
 
         // check that the old block ID is the latest block ID that was ZK proven (blockId)
-        require(oldBlockId == blockId);
+        require(oldBlockId == blockId, "Public input block id is not the latest ZK proven block id");
         // check that the old order chain is the tip of the order chain that was ZK proven last time
-        require(oldLatestClosedOrder == latestClosedOrder);
+        require(oldLatestClosedOrder == latestClosedOrder, "Public input latest closed order is not the latest ZK proven order");
         // require that the timestamp of the latest closed order is greater than or equal
         // to the timestamp of the new latest (known) block of Tron blockchain.
         // this is needed to prevent the relayer from censoring orders until they expire.
-        require(_orders[newLatestClosedOrder].timestamp >= newTimestamp);
+        require(_orders[newLatestClosedOrder].timestamp >= newTimestamp, "Latest closed order is required to be after latest ZK proven block timestamp");
         // check that the old state hash is equal to the current state hash
         // this is needed to prevent the relayer from modifying the state in the ZK program.
         require(oldStateHash == stateHash);
@@ -496,7 +496,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
 
         // check that the receivers are not already owned by another provider
         for (uint256 i = 0; i < receivers.length; i++) {
-            require(_receiverOwners[receivers[i]] == address(0), "Receiver is already owned");
+            require(_receiverOwners[receivers[i]] == address(0) || _receiverOwners[receivers[i]] == msg.sender, "Receiver is already owned by another provider");
             // set the receiver owner
             _receiverOwners[receivers[i]] = msg.sender;
         }
