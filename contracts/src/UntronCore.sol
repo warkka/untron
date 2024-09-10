@@ -147,6 +147,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
             size: size,
             rate: rate,
             minDeposit: providerMinDeposit,
+            isFulfilled: false,
             transfer: transfer
         });
 
@@ -206,7 +207,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     /// @param transfer The new transfer details.
     /// @dev The transfer details can only be changed before the order is fulfilled.
     function changeOrder(bytes32 orderId, Transfer calldata transfer) external {
-        require(_orders[orderId].creator == msg.sender, "Only creator can change the order");
+        require(_orders[orderId].creator == msg.sender && !_orders[orderId].isFulfilled, "Only creator can change the order");
 
         // change the transfer details
         _orders[orderId].transfer = transfer;
@@ -224,7 +225,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     ///      Stopping means that the order no longer needs listening for new USDT Tron transfers
     ///      and won't be fulfilled.
     function stopOrder(bytes32 orderId) external {
-        require(_orders[orderId].creator == msg.sender, "Only creator can stop the order");
+        require(_orders[orderId].creator == msg.sender && !_orders[orderId].isFulfilled, "Only creator can stop the order");
 
         // update the order chain with stop notifier
         updateOrderChain(_orders[orderId].receiver, 0);
@@ -323,6 +324,8 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
             _orders[activeOrderId].transfer.chainId = chainId();
             // fulfilled orders don't need swaps, because the fulfillers will always receive USDT L2 on the host chain.
             _orders[activeOrderId].transfer.doSwap = false;
+            // set the fulfilled order as isFullfilled true
+            _orders[activeOrderId].isFulfilled = true;
             // make the receiver not busy anymore
             delete _isReceiverBusy[_receivers[i]];
 
