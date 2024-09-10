@@ -75,6 +75,7 @@ interface IUntronCore is IUntronTransfers, IUntronState {
     );
     event OrderChanged(bytes32 orderId);
     event OrderStopped(bytes32 orderId);
+    event OrderChainUpdated(bytes32 orderId, uint256 timestamp, address receiver, uint256 minDeposit);
     event OrderFulfilled(bytes32 indexed orderId, address fulfiller);
     event OrderClosed(bytes32 indexed orderId, address relayer);
     event RelayUpdated(address relayer, bytes32 newBlockId, bytes32 newLatestClosedOrder, bytes32 newStateHash);

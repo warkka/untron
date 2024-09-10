@@ -89,6 +89,9 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         orderId = sha256(abi.encode(latestOrder, tronTimestamp, receiver, minDeposit));
         // latestOrder stores the latest order ID, that is, the tip of the order chain.
         latestOrder = orderId;
+
+        // Emit OrderChainUpdated event
+        emit OrderChainUpdated(orderId, tronTimestamp, receiver, minDeposit);
     }
 
     /// @notice Creates an order with no checks.
