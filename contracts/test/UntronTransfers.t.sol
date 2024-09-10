@@ -1,10 +1,3 @@
-/*
-    function withdrawLeftovers() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(IERC20(usdt).transfer(msg.sender, leftovers));
-        leftovers = 0;
-    }
-*/
-
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
