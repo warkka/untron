@@ -11,7 +11,6 @@ import "./UntronTools.sol";
 abstract contract UntronFees is UntronTools, Initializable, UntronState {
     /// @notice The number of basis points in 100%.
     uint256 constant bp = 1000000; // min 0.000001 i.e 0.0001%. made for consistency with usdt decimals
-
     /// @notice Initializes the contract with the provided parameters.
     /// @param _relayerFee The fee charged by the relayer, in percents.
     /// @param _feePoint The basic fee point used to calculate the fee per transfer.

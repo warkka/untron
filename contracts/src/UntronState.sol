@@ -84,7 +84,7 @@ abstract contract UntronState is Initializable, AccessControlUpgradeable, Accoun
     }
 
     // Accounts variables
-    uint256 public rate;
+    uint256 public maxSponsorships;
     uint256 public per;
 
     /// @notice Changes the rate and period of rate-limited calls with no checks
@@ -92,7 +92,7 @@ abstract contract UntronState is Initializable, AccessControlUpgradeable, Accoun
     /// @param _per The period of rate-limited calls
     /// @dev This function is only used during initialization and in changeRateLimit
     function _changeRateLimit(uint256 _rate, uint256 _per) internal {
-        rate = _rate;
+        maxSponsorships = _rate;
         per = _per;
         // see natspec of this function in AccountsPaymaster
         setPaymasterConfig(_rate, _per, true);
