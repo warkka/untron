@@ -9,13 +9,15 @@ use untron_program::{crypto, stf, Execution, State};
 // UntronOutput is the output (technically the public input) of the Untron program.
 // Must be encoded as defined in the smart contracts.
 // Format:
-// - old_block_id: [u8; 32] (block id of the previous latest known block in the Tron blockchain)
-// - new_block_id: [u8; 32] (block id of the latest known block in the Tron blockchain after applying the execution)
-// - new_timestamp: u64 (timestamp of the latest known block in the Tron blockchain after applying the execution)
+// - old_block_id: [u8; 32] (block id of the previous latest zk proven block in the Tron blockchain)
 // - old_order_chain: [u8; 32] (chained hash of all orders in the Untron contract before applying the execution)
-// - new_order_chain: [u8; 32] (chained hash of all orders in the Untron contract after applying the execution)
 // - old_state_hash: [u8; 32] (hash of the previous state of the Untron program)
+
+// - new_block_id: [u8; 32] (block id of the latest zk proven block in the Tron blockchain after applying the execution)
+// - new_order_chain: [u8; 32] (chained hash of all orders in the Untron contract after applying the execution)
 // - new_state_hash: [u8; 32] (hash of the new state of the Untron program after applying the execution)
+
+// - new_timestamp: u64 (timestamp of the latest zk proven block in the Tron blockchain after applying the execution)
 // - closed_orders: Vec<(bytes32, uint64)> (list of all orders that must be closed in the Untron contract after applying the execution)
 type UntronOutput = sol! {
     tuple(bytes32,bytes32,uint64,bytes32,bytes32,bytes32,bytes32,(bytes32,uint64)[])
@@ -38,7 +40,7 @@ pub fn main() {
         blocks: bincode::deserialize(&read_vec()).unwrap(),
     };
 
-    // get the latest known Tron blockchain's block id and Untron's order chain (chained hash of all orders)
+    // get the latest zk proven Tron blockchain's block id and Untron's order chain (chained hash of all orders)
     let old_block_id = state.latest_block_id;
     let old_order_chain = state.order_chain;
 

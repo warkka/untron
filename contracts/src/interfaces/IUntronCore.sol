@@ -44,13 +44,13 @@ interface IUntronCore is IUntronTransfers, IUntronState {
         uint256 minOrderSize;
         // minimum deposit in USDT Tron
         uint256 minDeposit;
-        // provider's Tron addresses to receive the USDT Tron from the users
+        // provider's Tron addresses to receive the USDT Tron from the order creators
         address[] receivers;
     }
 
     /// @notice Struct representing the inflow of USDT Tron to the Untron protocol.
     /// @dev This struct is created within the ZK part of the protocol.
-    ///      It represents the amount of USDT Tron that the user has sent to the receiver address
+    ///      It represents the amount of USDT Tron that the order creator has sent to the receiver address
     ///      specified in the order with specified ID.
     ///      As the ZK program is the one scanning all USDT transfers in Tron blockchain,
     ///      it is able to find all the transfers to active receivers.

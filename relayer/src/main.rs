@@ -172,7 +172,7 @@ impl Untron {
         let latest_block_id = self.contract.block_id().call().await?;
 
         tracing::info!(
-            "Latest known block ID in the contract: {:?}",
+            "latest zk proven block ID in the contract: {:?}",
             hex::encode(latest_block_id)
         );
 

@@ -21,8 +21,8 @@ interface IUntronTransfers {
         // minimum amount of output tokens to receive per 1 USDT L2.
         uint256 minOutputPerUSDT;
         // whether the minimum amount of output tokens is fixed.
-        // if true, the user will receive exactly minOutputPerUSDT * amount of output tokens.
-        // if false, the user will receive at least minOutputPerUSDT * amount of output tokens.
+        // if true, the order creator will receive exactly minOutputPerUSDT * amount of output tokens.
+        // if false, the order creator will receive at least minOutputPerUSDT * amount of output tokens.
         bool fixedOutput;
         // data for the swap. Not used if doSwap is false.
         bytes swapData;

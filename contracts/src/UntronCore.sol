@@ -101,7 +101,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     /// @param rate The "USDT L2 per 1 USDT Tron" rate of the order.
     /// @param transfer The transfer details.
     ///                 They'll be used in the fulfill or closeOrders functions to send respective
-    ///                 USDT L2 to the user or convert them into whatever the user wants to receive
+    ///                 USDT L2 to the order creator or convert them into whatever the order creator wants to receive
     ///                 for their USDT Tron.
     /// @dev This function must only be called in the createOrder and createOrderUnlimited functions.
     function _createOrder(
@@ -159,7 +159,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     /// @param rate The "USDT L2 per 1 USDT Tron" rate of the order.
     /// @param transfer The transfer details.
     ///                 They'll be used in the fulfill or closeOrders functions to send respective
-    ///                 USDT L2 to the user or convert them into whatever the user wants to receive
+    ///                 USDT L2 to the order creator or convert them into whatever the order creator wants to receive
     ///                 for their USDT Tron.
     /// @dev The function is rate-limited based on limits specified in UntronState.
     function createOrder(address provider, address receiver, uint256 size, uint256 rate, Transfer calldata transfer)
@@ -185,7 +185,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     /// @param rate The "USDT L2 per 1 USDT Tron" rate of the order.
     /// @param transfer The transfer details.
     ///                 They'll be used in the fulfill or closeOrders functions to send respective
-    ///                 USDT L2 to the user or convert them into to whatever the user wants to receive
+    ///                 USDT L2 to the order creator or convert them into to whatever the order creator wants to receive
     ///                 for their USDT Tron.
     function createOrderUnlimited(
         address provider,
@@ -216,7 +216,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     /// @param orderId The ID of the order to stop.
     /// @dev The order can only be stopped before it's fulfilled.
     ///      Closing and stopping the order are different things.
-    ///      Closing means that provider's funds are unlocked to either the user or the provider
+    ///      Closing means that provider's funds are unlocked to either the order creator or the provider
     ///      as the order completed its listening cycle.
     ///      Stopping means that the order no longer needs listening for new USDT Tron transfers
     ///      and won't be fulfilled.
@@ -232,7 +232,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         _providers[_orders[orderId].provider].liquidity += _orders[orderId].size;
 
         // delete the order because it won't be fulfilled/closed
-        // (stopOrder assumes that the user sent nothing)
+        // (stopOrder assumes that the order creator sent nothing)
         delete _orders[orderId];
 
         // Emit OrderStopped event
@@ -279,8 +279,8 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     /// @dev Fulfillment exists because ZK proofs that actually *close* the orders
     ///      are published every 60-90 minutes. This means that provider's funds
     ///      will only be unlocked to them or to order creators with this delay.
-    ///      However, we want the users to receive the funds ASAP.
-    ///      Fulfillers send users' ask in advance when they see that their USDT
+    ///      However, we want the order creators to receive the funds ASAP.
+    ///      Fulfillers send order creators' ask in advance when they see that their USDT
     ///      transfer happened on Tron blockchain, but wasn't ZK proven yet.
     ///      After the transfer is ZK proven, they'll receive the full amount of
     ///      USDT L2.
@@ -289,7 +289,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     function fulfill(address[] calldata _receivers, uint256 total) external {
         // take the declared amount of USDT L2 from the fulfiller
         internalTransferFrom(msg.sender, total);
-        // this variable will be used to calculate how much the contract sent to the users.
+        // this variable will be used to calculate how much the contract sent to the order creators.
         // this number must be equal to "total" to prevent the fulfiller from stealing the funds in the contract.
         uint256 expectedTotal;
 
@@ -316,7 +316,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
             // to make fulfiller receive provider's USDT L2 after the ZK proof is published
             _orders[activeOrderId].transfer.recipient = msg.sender;
             // fulfiller will always receive provider's USDT L2 on the contract host chain (ZKsync Era),
-            // as opposed to user's transfer that could be on any chain
+            // as opposed to order creator's transfer that could be on any chain
             _orders[activeOrderId].transfer.chainId = chainId();
             // fulfilled orders don't need swaps, because the fulfillers will always receive USDT L2 on the host chain.
             _orders[activeOrderId].transfer.doSwap = false;
@@ -346,7 +346,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     ///      If all relayers are down for more than 3 hours, relaying becomes permissionless (see lastRelayerActivity).
     bytes32 public constant RELAYER_ROLE = keccak256("RELAYER_ROLE");
 
-    /// @notice Closes the orders and sends the funds to the providers or users, if not fulfilled.
+    /// @notice Closes the orders and sends the funds to the providers or order creators, if not fulfilled.
     /// @param proof The ZK proof.
     /// @param publicValues The public values for the proof and order closure.
     function closeOrders(bytes calldata proof, bytes calldata publicValues) external {
@@ -370,10 +370,10 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         (
             // old block ID must be the latest block ID that was ZK proven (blockId)
             bytes32 oldBlockId,
-            // new block ID is the new latest (known) block ID of Tron blockchain
+            // new block ID is the new latest (zk proven) block ID of Tron blockchain
             // all blocks revealed by the ZK proof are finalized in the Tron network
             bytes32 newBlockId,
-            // new timestamp is the timestamp of the new latest (known) block of Tron blockchain
+            // new timestamp is the timestamp of the new latest (zk proven) block of Tron blockchain
             uint256 newTimestamp,
             // "old latest closed order" is the tip of the order chain that was ZK proven last time
             bytes32 oldLatestClosedOrder,
@@ -395,7 +395,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         // check that the old order chain is the tip of the order chain that was ZK proven last time
         require(oldLatestClosedOrder == latestClosedOrder, "Public input latest closed order is not the latest ZK proven order");
         // require that the timestamp of the latest closed order is greater than or equal
-        // to the timestamp of the new latest (known) block of Tron blockchain.
+        // to the timestamp of the new latest (zk proven) block of Tron blockchain.
         // this is needed to prevent the relayer from censoring orders until they expire.
         require(_orders[newLatestClosedOrder].timestamp >= newTimestamp, "Latest closed order is required to be after latest ZK proven block timestamp");
         // check that the old state hash is equal to the current state hash
@@ -417,17 +417,17 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
 
             // get the minimum inflow amount.
             // minInflow is the minimum number between the inflow amount on Tron and the order size.
-            // this is needed so that the user/fulfiller doesn't get more than the order size (locked liquidity).
+            // this is needed so that the order creator/fulfiller doesn't get more than the order size (locked liquidity).
             uint256 minInflow =
                 closedOrders[i].inflow < _orders[orderId].size ? closedOrders[i].inflow : _orders[orderId].size;
 
-            // calculate the amount and fee the user/fulfiller will receive
+            // calculate the amount and fee the order creator/fulfiller will receive
             (uint256 amount, uint256 fee) = conversion(minInflow, _orders[orderId].rate, 0, true);
             // add the fee to the total fee
             totalFee += fee;
 
             // remove fixed output flag to make the transfer unrevertable
-            // (if the user hadn't changed the transfer details by that time it's their fault tbh)
+            // (if the order creator hadn't changed the transfer details by that time it's their fault tbh)
             _orders[orderId].transfer.fixedOutput = false;
 
             // perform the transfer
@@ -448,15 +448,15 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     /// @param liquidity The liquidity of the provider in USDT L2.
     /// @param rate The rate (USDT L2 per 1 USDT Tron) of the provider.
     /// @param minOrderSize The minimum size of the order in USDT Tron.
-    /// @param minDeposit The minimum amount the user can transfer to the receiver, in USDT Tron.
+    /// @param minDeposit The minimum amount the order creator can transfer to the receiver, in USDT Tron.
     ///                   This is needed for so-called "reverse swaps", when the provider is
-    ///                   actually a normal user who wants to swap USDT L2 for USDT Tron,
-    ///                   and the user (who creates the orders) is an automated entity,
+    ///                   actually a normal order creator who wants to swap USDT L2 for USDT Tron,
+    ///                   and the order creator (who creates the orders) is an automated entity,
     ///                   called "sender", that accepts such orders and performs transfers on Tron network.
-    ///                   Users doing reverse swaps usually want to receive the entire order size
+    ///                   order creators doing reverse swaps usually want to receive the entire order size
     ///                   in a single transfer, hence the need for minDeposit.
     ///                   minOrderSize == liquidity * rate signalizes for senders that the provider
-    ///                   is a user performing a reverse swap.
+    ///                   is a order creator performing a reverse swap.
     /// @param receivers The provider's Tron addresses that are used to receive USDT Tron.
     ///                  The more receivers the provider has, the more concurrent orders the provider can have.
     function setProvider(
