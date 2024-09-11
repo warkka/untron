@@ -13,7 +13,7 @@ import "./UntronTools.sol";
 /// @author Ultrasound Labs
 /// @notice This module is responsible for handling all the transfers in the Untron protocol.
 /// @dev Transfer, within Untron terminology (unless specified otherwise: USDT transfer, Tron transfer, etc),
-///      is the process of user receiving the coins in the L2 ecosystem for the USDT Tron they sent.
+///      is the process of order creator receiving the coins in the L2 ecosystem for the USDT Tron they sent.
 ///      Natively, these tokens are USDT L2 (on ZKsync Era, Untron's host chain).
 ///      However, the module is designed to be as chain- and coin-agnostic as possible,
 ///      so it supports on-the-fly swaps of USDT L2 to other coins and cross-chain transfers through Across bridge.
@@ -71,7 +71,7 @@ abstract contract UntronTransfers is IUntronTransfers, UntronTools, Initializabl
     }
 
     /// @notice Excessive output amount after the swap.
-    /// @dev in some swaps, the user wants to receive specific amount,
+    /// @dev in some swaps, the order creator wants to receive specific amount,
     ///      but the swap function might return slightly more.
     ///      Therefore, if fixedOutput is specified in the transfer,
     ///      we take the excessive amount and add it to the leftovers.
@@ -105,7 +105,7 @@ abstract contract UntronTransfers is IUntronTransfers, UntronTools, Initializabl
                 leftovers += output - amount;
             } else {
                 // if the transfer doesn't require a fixed output amount,
-                // the user will receive the entire output amount
+                // the order creator will receive the entire output amount
                 amount = output;
             }
         }

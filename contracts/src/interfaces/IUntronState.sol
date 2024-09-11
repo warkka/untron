@@ -9,7 +9,7 @@ interface IUntronState {
     function UPGRADER_ROLE() external view returns (bytes32);
 
     /// @notice Updates the UntronCore-related variables
-    /// @param _blockId The new block ID of the latest known Tron block
+    /// @param _blockId The new block ID of the latest zk proven Tron block
     /// @param _latestOrder The new ID of the latest created order
     /// @param _latestClosedOrder The new ID of the latest closed order
     /// @param _stateHash The new hash of the latest state of Untron ZK program

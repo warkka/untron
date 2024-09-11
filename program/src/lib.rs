@@ -42,11 +42,11 @@ pub struct OrderState {
 // State is the state of the Untron program
 #[derive(Default, Serialize, Deserialize, Clone, Debug)]
 pub struct State {
-    // id of the latest known block in the Tron blockchain
+    // id of the latest zk proven block in the Tron blockchain
     pub latest_block_id: [u8; 32],
-    // timestamp of the latest known block in the Tron blockchain
+    // timestamp of the latest zk proven block in the Tron blockchain
     pub latest_timestamp: u64,
-    // 18 latest block proposers. they all must be unique (that is, 18/27 SRs must follow the chain we prove)
+    // 19 latest block proposers. they all must be unique (that is, 19/27 SRs must follow the chain we prove)
     pub cycle: Vec<[u8; 20]>,
     // list of all SRs (super representatives) in the Tron blockchain
     pub srs: [[u8; 20]; 27],
@@ -162,17 +162,17 @@ pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], u64)> {
         assert!(state.srs.contains(&sr));
 
         // move the cycle forward
-        if state.cycle.len() == 18 {
+        if state.cycle.len() == 19 {
             state.cycle.remove(0);
         }
-        // verify that the proposer is not in the cycle (has not proposed the last 18 blocks)
+        // verify that the proposer is not in the cycle (has not proposed the last 19 blocks)
         assert!(!state.cycle.contains(&sr));
         // add the proposer to the cycle
         state.cycle.push(sr);
 
         // we do verify the latest 19 blocks but don't check their contents
-        // so that all blocks that were checked are finalized
-        if block_count - i < 19 {
+        // so that all blocks that were checked are finalized (19 blocks built on top of them)
+        if block_count - i <= 19 {
             continue;
         }
 
@@ -197,7 +197,7 @@ pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], u64)> {
                 // if the order is live, we...
                 match active_addresses.entry(order.address) {
                     // if the address from the order is already active, we close the order
-                    // (double order to the same address means its manual closure)
+                    // (double order to the same address means it was stopped by the order creator)
                     std::collections::hash_map::Entry::Occupied(_) => {
                         state.orders.remove(&order_id);
                         closed_orders.push((order_id, order.inflow));

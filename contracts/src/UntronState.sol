@@ -18,9 +18,9 @@ abstract contract UntronState is Initializable, AccessControlUpgradeable, Accoun
     /// @notice Initializes the contract
     /// @dev This function is called once during the contract's deployment
     function __UntronState_init() internal onlyInitializing {
-        // Initialize the paymaster with a rate limit of 10 gas sponsorships per 24 hours for one user.
+        // Initialize the paymaster with a rate limit of 10 gas sponsorships per 24 hours for one order creator.
         __AccountsPaymaster_init(msg.sender, 10, 24 hours, false);
-        // Set the rate limit to 10 actions per 24 hours for one user, same as for the paymaster.
+        // Set the rate limit to 10 actions per 24 hours for one order creator, same as for the paymaster.
         // Both paymaster and normal rate limiting utilize "Accounts" library under the hood.
         _changeRateLimit(10, 24 hours);
     }
