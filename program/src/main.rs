@@ -6,7 +6,7 @@ use sp1_zkvm::io::{commit_slice, read_vec};
 
 use untron_program::{crypto, stf, Execution, State};
 
-// UntronOutput is the output (technically the public input) of the Untron program.
+// UntronPublicValues are the public values (technically the public input) of the Untron program.
 // Must be encoded as defined in the smart contracts.
 // Format:
 // - old_block_id: [u8; 32] (block id of the previous latest zk proven block in the Tron blockchain)
@@ -19,7 +19,7 @@ use untron_program::{crypto, stf, Execution, State};
 
 // - new_timestamp: u64 (timestamp of the latest zk proven block in the Tron blockchain after applying the execution)
 // - closed_orders: Vec<(bytes32, uint64)> (list of all orders that must be closed in the Untron contract after applying the execution)
-type UntronOutput = sol! {
+type UntronPublicValues = sol! {
     tuple(bytes32,bytes32,uint64,bytes32,bytes32,bytes32,bytes32,(bytes32,uint64)[])
 };
 
@@ -50,7 +50,7 @@ pub fn main() {
     // compute the new state hash
     let new_state_hash = crypto::hash(&bincode::serialize(&state).unwrap());
 
-    let output = UntronOutput::abi_encode(&(
+    let public_values = UntronPublicValues::abi_encode(&(
         old_block_id,
         state.latest_block_id,
         state.latest_timestamp,
@@ -61,6 +61,6 @@ pub fn main() {
         closed_orders,
     ));
 
-    // commit the output to public inputs
-    commit_slice(&output);
+    // commit the public values as public inputs for the zk proof
+    commit_slice(&public_values);
 }
