@@ -27,6 +27,9 @@ interface IUntronCore is IUntronTransfers, IUntronState {
         uint256 rate;
         // the minimum deposit in USDT Tron
         uint256 minDeposit;
+        // boolean indicating if the order is fulfilled. If it is then the order creator is the fulfiller.
+        // if not, then it is simply the order creator.
+        bool isFulfilled;
         // the transfer details for the order.
         // It can be as simple as a direct USDT L2 (zksync) transfer to the recipient,
         // or it can be a more complex transfer such as a 1inch swap of USDT L2 (zksync) to the other coin,
@@ -75,6 +78,7 @@ interface IUntronCore is IUntronTransfers, IUntronState {
     );
     event OrderChanged(bytes32 orderId);
     event OrderStopped(bytes32 orderId);
+    event OrderChainUpdated(bytes32 orderId, uint256 timestamp, address receiver, uint256 minDeposit);
     event OrderFulfilled(bytes32 indexed orderId, address fulfiller);
     event OrderClosed(bytes32 indexed orderId, address relayer);
     event RelayUpdated(address relayer, bytes32 newBlockId, bytes32 newLatestClosedOrder, bytes32 newStateHash);
