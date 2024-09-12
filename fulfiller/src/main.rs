@@ -21,12 +21,13 @@ abigen!(
     "../contracts/zkout/UntronCore.sol/UntronCore.json"
 );
 
+#[allow(clippy::type_complexity)]
 async fn run_order_listener(
     mut stream: EventStream<
         '_,
         SubscriptionStream<'_, Ws, Log>,
-        OrderCreatedFilter,
-        ContractError<SignerMiddleware<Provider<Ws>, Wallet<k256::ecdsa::SigningKey>>>>,
+        OrderChainUpdatedFilter,
+        ContractError<SignerMiddleware<Provider<Ws>, LocalWallet>>,
     >,
 ) {
     while let Some(event) = stream.next().await {
@@ -53,7 +54,7 @@ async fn run_zksync(
         wallet.get_era_provider()?,
     );
 
-    let event = contract.event::<OrderCreatedFilter>();
+    let event = contract.event::<OrderChainUpdatedFilter>();
     let stream = event.subscribe().await?;
 
     run_order_listener(stream).await;
