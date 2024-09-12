@@ -313,6 +313,9 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
             // perform the transfer
             smartTransfer(order.transfer, amount);
 
+            // update order chain to free the receiver
+            updateOrderChain(_receivers[i], 0);
+
             // update the order details
 
             // to prevent from modifying the order after it's fulfilled
