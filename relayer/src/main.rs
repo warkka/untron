@@ -1,5 +1,3 @@
-mod types;
-
 use ethers::contract::abigen;
 use ethers::middleware::SignerMiddleware;
 use ethers::prelude::*;
@@ -17,11 +15,8 @@ use zksync_web3_rs::signers::{LocalWallet, Signer};
 use zksync_web3_rs::types::H160;
 use zksync_web3_rs::ZKSWallet;
 
-use types::Config;
-
-tonic::include_proto!("protocol");
-
-use wallet_client::WalletClient;
+use untron_relayer::proto::{wallet_client::WalletClient, BlockExtention, NumberMessage};
+use untron_relayer::types::Config;
 
 abigen!(
     UntronCore,
@@ -76,14 +71,14 @@ fn get_time() -> u64 {
         .as_secs()
 }
 
-struct Untron {
+struct UntronRelayer {
     config: Config,
     client: WalletClient<Channel>,
     contract: UntronCore<SignerMiddleware<Provider<Ws>, LocalWallet>>,
     state: State,
     prover: ProverClient,
 }
-impl Untron {
+impl UntronRelayer {
     pub async fn new(config: Config) -> Result<Self, Box<dyn std::error::Error>> {
         let client = WalletClient::connect(config.tron.rpc.clone()).await?;
 
@@ -349,10 +344,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config: Config = toml::from_str(&fs::read_to_string("config.toml").await?)?;
     tracing::info!("Config: {:?}", config);
 
-    let untron = Untron::new(config).await?;
-    tracing::info!("Untron Core glue initialized");
+    let relayer = UntronRelayer::new(config).await?;
+    tracing::info!("Untron relayer initialized");
 
-    untron.run().await?;
+    relayer.run().await?;
 
     Ok(())
 }

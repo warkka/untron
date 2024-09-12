@@ -2,9 +2,12 @@
 rpc = "https://mainnet.era.zksync.io"
 private_key = "0xb00ba"
 untron_contract_address = "0x0000000000000000000000000000000000000000"
+fulfill = false
 
 [tron]
 rpc = "https://api.trongrid.io/jsonrpc"
+auto_close = false
+min_fee = 2500000
 
 [relay]
 proof_interval = 7200 # 2 hours
