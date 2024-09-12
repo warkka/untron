@@ -20,8 +20,8 @@ pub const MAINTENANCE_PERIOD_BLOCK_OFFSET: u32 = 1387;
 // in docs it's 7200, but actually it's 7198 blocks because maintenance window skips two blocks
 pub const MAINTENANCE_PERIOD_INTERVAL: u32 = 7198;
 
-// OrderChain is the format of the order data that's needed for the program, chained with the previous order
-pub type OrderChain = sol! {
+// Action is the format of the action data that's needed for the program, chained with the previous action
+pub type Action = sol! {
     tuple(bytes32,uint64,address,uint64)
 };
 
@@ -54,8 +54,8 @@ pub struct State {
     pub votes: HashMap<[u8; 20], u64>,
     // all currently active orders in the Untron protocol
     pub orders: HashMap<[u8; 32], OrderState>,
-    // chained hash of all orders in the Untron protocol
-    pub order_chain: [u8; 32],
+    // chained hash of all actions in the Untron protocol
+    pub action_chain: [u8; 32],
 }
 
 // Order is the data of a new order in the Untron protocol.
@@ -111,17 +111,17 @@ pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], u64)> {
     // iterate over all new orders to form the new order chain
     for order in execution.orders {
         // encode the order into the chained ABI format
-        let chained_order = OrderChain::abi_encode(&(
-            state.order_chain,
+        let action = Action::abi_encode(&(
+            state.action_chain,
             order.timestamp,
             order.address,
             order.min_deposit,
         ));
         // hash the chained order and insert it into the state
-        state.order_chain = crypto::hash(&chained_order);
+        state.action_chain = crypto::hash(&action);
         // insert the order data into the state
         state.orders.insert(
-            state.order_chain,
+            state.action_chain,
             OrderState {
                 address: order.address,
                 timestamp: order.timestamp,

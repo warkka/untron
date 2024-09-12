@@ -10,11 +10,11 @@ use untron_program::{crypto, stf, Execution, State};
 // Must be encoded as defined in the smart contracts.
 // Format:
 // - old_block_id: [u8; 32] (block id of the previous latest zk proven block in the Tron blockchain)
-// - old_order_chain: [u8; 32] (chained hash of all orders in the Untron contract before applying the execution)
+// - old_action_chain: [u8; 32] (chained hash of all performed actions in the Untron contract before applying the execution)
 // - old_state_hash: [u8; 32] (hash of the previous state of the Untron program)
 
 // - new_block_id: [u8; 32] (block id of the latest zk proven block in the Tron blockchain after applying the execution)
-// - new_order_chain: [u8; 32] (chained hash of all orders in the Untron contract after applying the execution)
+// - new_action_chain: [u8; 32] (chained hash of all performed actions in the Untron contract after applying the execution)
 // - new_state_hash: [u8; 32] (hash of the new state of the Untron program after applying the execution)
 
 // - new_timestamp: u64 (timestamp of the latest zk proven block in the Tron blockchain after applying the execution)
@@ -40,9 +40,9 @@ pub fn main() {
         blocks: bincode::deserialize(&read_vec()).unwrap(),
     };
 
-    // get the latest zk proven Tron blockchain's block id and Untron's order chain (chained hash of all orders)
+    // get the latest zk proven Tron blockchain's block id and Untron's action chain (chained hash of all actions)
     let old_block_id = state.latest_block_id;
-    let old_order_chain = state.order_chain;
+    let old_action_chain = state.action_chain;
 
     // perform execution over the state through the state transition function (see lib.rs for details)
     let closed_orders = stf(&mut state, execution);
@@ -54,8 +54,8 @@ pub fn main() {
         old_block_id,
         state.latest_block_id,
         state.latest_timestamp,
-        old_order_chain,
-        state.order_chain,
+        old_action_chain,
+        state.action_chain,
         old_state_hash,
         new_state_hash,
         closed_orders,
