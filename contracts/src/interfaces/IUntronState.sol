@@ -10,13 +10,13 @@ interface IUntronState {
 
     /// @notice Updates the UntronCore-related variables
     /// @param _blockId The new block ID of the latest zk proven Tron block
-    /// @param _latestOrder The new ID of the latest created order
-    /// @param _latestClosedOrder The new ID of the latest closed order
+    /// @param _actionChainTip The new action chain tip
+    /// @param _latestPerformedAction The new latest performed action from the action chain
     /// @param _stateHash The new hash of the latest state of Untron ZK program
     function setUntronCoreVariables(
         bytes32 _blockId,
-        bytes32 _latestOrder,
-        bytes32 _latestClosedOrder,
+        bytes32 _actionChainTip,
+        bytes32 _latestPerformedAction,
         bytes32 _stateHash,
         uint256 _maxOrderSize
     ) external;

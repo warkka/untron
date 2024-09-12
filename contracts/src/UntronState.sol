@@ -27,22 +27,22 @@ abstract contract UntronState is Initializable, AccessControlUpgradeable, Accoun
 
     // UntronCore variables
     bytes32 public blockId;
-    bytes32 public latestOrder;
-    bytes32 public latestClosedOrder;
+    bytes32 public actionChainTip;
+    bytes32 public latestPerformedAction;
     bytes32 public stateHash;
     uint256 public maxOrderSize;
 
     /// @inheritdoc IUntronState
     function setUntronCoreVariables(
         bytes32 _blockId,
-        bytes32 _latestOrder,
-        bytes32 _latestClosedOrder,
+        bytes32 _actionChainTip,
+        bytes32 _latestPerformedAction,
         bytes32 _stateHash,
         uint256 _maxOrderSize
     ) external onlyRole(UPGRADER_ROLE) {
         blockId = _blockId;
-        latestOrder = _latestOrder;
-        latestClosedOrder = _latestClosedOrder;
+        actionChainTip = _actionChainTip;
+        latestPerformedAction = _latestPerformedAction;
         stateHash = _stateHash;
         maxOrderSize = _maxOrderSize;
     }

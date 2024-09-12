@@ -10,8 +10,8 @@ import "./IUntronState.sol";
 interface IUntronCore is IUntronTransfers, IUntronState {
     /// @notice Struct representing a Tron->L2 order in the Untron protocol
     struct Order {
-        // the ID of the previous order
-        bytes32 prevOrder;
+        // the tip of the action chain before this order was created
+        bytes32 parent;
         // the timestamp of the order
         uint256 timestamp;
         // the creator of the order (will send USDT Tron)
@@ -78,7 +78,7 @@ interface IUntronCore is IUntronTransfers, IUntronState {
     );
     event OrderChanged(bytes32 orderId);
     event OrderStopped(bytes32 orderId);
-    event OrderChainUpdated(bytes32 orderId, uint256 timestamp, address receiver, uint256 minDeposit);
+    event ActionChainUpdated(bytes32 orderId, uint256 timestamp, address receiver, uint256 minDeposit);
     event OrderFulfilled(bytes32 indexed orderId, address fulfiller);
     event OrderClosed(bytes32 indexed orderId, address relayer);
     event RelayUpdated(address relayer, bytes32 newBlockId, bytes32 newLatestClosedOrder, bytes32 newStateHash);

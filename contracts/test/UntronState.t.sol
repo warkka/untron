@@ -68,16 +68,16 @@ contract UntronStateTest is Test {
         vm.startPrank(admin);
 
         bytes32 blockId = bytes32(uint256(1));
-        bytes32 latestOrder = bytes32(uint256(2));
-        bytes32 latestClosedOrder = bytes32(uint256(3));
+        bytes32 actionChainTip = bytes32(uint256(2));
+        bytes32 latestPerformedAction = bytes32(uint256(3));
         bytes32 stateHash = bytes32(uint256(4));
         uint256 maxOrderSize = 100;
 
-        untronState.setUntronCoreVariables(blockId, latestOrder, latestClosedOrder, stateHash, maxOrderSize);
+        untronState.setUntronCoreVariables(blockId, actionChainTip, latestPerformedAction, stateHash, maxOrderSize);
 
         assertEq(untronState.blockId(), blockId);
-        assertEq(untronState.latestOrder(), latestOrder);
-        assertEq(untronState.latestClosedOrder(), latestClosedOrder);
+        assertEq(untronState.actionChainTip(), actionChainTip);
+        assertEq(untronState.latestPerformedAction(), latestPerformedAction);
         assertEq(untronState.stateHash(), stateHash);
         assertEq(untronState.maxOrderSize(), maxOrderSize);
 
@@ -86,13 +86,13 @@ contract UntronStateTest is Test {
 
     function test_setUntronCoreVariables_RevertIf_NotUpgraderRole() public {
         bytes32 blockId = bytes32(uint256(1));
-        bytes32 latestOrder = bytes32(uint256(2));
-        bytes32 latestClosedOrder = bytes32(uint256(3));
+        bytes32 actionChainTip = bytes32(uint256(2));
+        bytes32 latestPerformedAction = bytes32(uint256(3));
         bytes32 stateHash = bytes32(uint256(4));
         uint256 maxOrderSize = 100;
 
         vm.expectRevert();
-        untronState.setUntronCoreVariables(blockId, latestOrder, latestClosedOrder, stateHash, maxOrderSize);
+        untronState.setUntronCoreVariables(blockId, actionChainTip, latestPerformedAction, stateHash, maxOrderSize);
     }
 
     function test_setUntronZKVariables_SetVariables() public {

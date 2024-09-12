@@ -124,8 +124,8 @@ contract UntronCoreTest is Test {
 
         untron.setUntronCoreVariables(
             bytes32(0), // blockId
-            bytes32(0), // latestOrder
-            bytes32(0), // latestClosedOrder
+            bytes32(0), // actionChainTip
+            bytes32(0), // latestPerformedAction
             bytes32(0), // stateHash
             1000e6 // maxOrderSize
         );
@@ -146,7 +146,7 @@ contract UntronCoreTest is Test {
         assertEq(untron.hasRole(untron.UPGRADER_ROLE(), admin), true);
         assertEq(untron.hasRole(untron.UNLIMITED_CREATOR_ROLE(), admin), true);
     }
-    
+
     function test_providers_GetProviderDetails() public {
         // Given
         setupProvider(provider, receiver);
@@ -223,7 +223,7 @@ contract UntronCoreTest is Test {
 
         // Then
         orderId = untron.isReceiverBusy(receiver);
-        assertEq(untron.latestOrder(), orderId);
+        assertEq(untron.actionChainTip(), orderId);
         IUntronCore.Order memory _order = untron.orders(orderId);
 
         assertEq(_order.creator, user);
@@ -278,7 +278,7 @@ contract UntronCoreTest is Test {
 
         // Set up 11 receivers
         address[] memory receivers = new address[](11);
-        
+
         for (uint256 i = 0; i < 11; i++) {
             receivers[i] = address(uint160(100 + i));
         }
@@ -307,7 +307,7 @@ contract UntronCoreTest is Test {
         vm.expectRevert();
         // Rate limit should be initialized to 10 actions per 24 hours so this should revert
         untron.createOrder(provider, receivers[10], 100e6, 1e6, transfer);
-        
+
         // Then
         vm.stopPrank();
     }
@@ -493,10 +493,10 @@ contract UntronCoreTest is Test {
             fixedOutput: false,
             swapData: ""
         });
-        
+
         untron.createOrderUnlimited(provider, receiver, 500e6, 1e6, transfer);
         vm.stopPrank();
-        
+
         // Then
         // Check order details
         bytes32 orderId = untron.isReceiverBusy(receiver);
@@ -536,7 +536,7 @@ contract UntronCoreTest is Test {
             fixedOutput: false,
             swapData: ""
         });
-        
+
         for (uint256 i = 0; i < 10; i++) {
             untron.createOrderUnlimited(provider, receivers[i], 100e6, 1e6, transfer);
         }
@@ -545,7 +545,7 @@ contract UntronCoreTest is Test {
         // No revert should happen
         untron.createOrderUnlimited(provider, receivers[10], 100e6, 1e6, transfer);
         vm.stopPrank();
-        
+
         // Then
         // Check order details
         for (uint256 i = 0; i < 11; i++) {
@@ -581,7 +581,7 @@ contract UntronCoreTest is Test {
 
         vm.expectRevert();
         untron.createOrderUnlimited(provider, receiver, 500e6, 1e6, transfer);
-        
+
         vm.stopPrank();
     }
 
@@ -680,11 +680,11 @@ contract UntronCoreTest is Test {
         uint256 afterLiquidity = untron.providers(provider).liquidity;
         assertEq(afterLiquidity, beforeLiquidity + _oldOrder.size);
         // TODO: Calculate hash and check correct
-        // assertEq(untron.latestOrder(), "TBA");
+        // assertEq(untron.actionChainTip(), "TBA");
         assertEq(untron.isReceiverBusy(receiver), bytes32(0));
 
         // Check order was deleted
-        assertEq(defaultOrder.prevOrder, bytes32(0));
+        assertEq(defaultOrder.parent, bytes32(0));
         assertEq(defaultOrder.timestamp, 0);
         assertEq(defaultOrder.creator, address(0));
         assertEq(defaultOrder.provider, address(0));
@@ -862,7 +862,10 @@ contract UntronCoreTest is Test {
         vm.stopPrank();
     }
 
-    function test_closeOrders_CloseOrdersWithRelayerRole() public returns (bytes32 orderId, bytes memory publicValues) {
+    function test_closeOrders_CloseOrdersWithRelayerRole()
+        public
+        returns (bytes32 orderId, bytes memory publicValues)
+    {
         // Set up provider, create order, and fulfill order
         orderId = createOrder(user, provider, receiver);
         fulfillOrder(fulfiller, receiver);
@@ -879,8 +882,8 @@ contract UntronCoreTest is Test {
             bytes32(0), // oldBlockId
             bytes32(uint256(1)), // newBlockId
             block.timestamp - 1, // newTimestamp
-            bytes32(0), // oldLatestClosedOrder
-            orderId, // newLatestClosedOrder
+            bytes32(0), // oldlatestPerformedAction
+            orderId, // newlatestPerformedAction
             bytes32(0), // oldStateHash
             bytes32(uint256(1)), // newStateHash
             closedOrders // closedOrders
@@ -893,7 +896,7 @@ contract UntronCoreTest is Test {
 
         // Check state updates
         assertEq(untron.blockId(), bytes32(uint256(1)));
-        assertEq(untron.latestClosedOrder(), orderId);
+        assertEq(untron.latestPerformedAction(), orderId);
         assertEq(untron.stateHash(), bytes32(uint256(1)));
 
         // Check balance changes
@@ -923,7 +926,7 @@ contract UntronCoreTest is Test {
         preClosedOrders[0] = IUntronCore.Inflow({order: preOrderId, inflow: 500e6});
 
         bytes32 preNewBlockId = bytes32(uint256(1));
-        bytes32 preNewLatestClosedOrder = preOrderId;
+        bytes32 preNewlatestPerformedAction = preOrderId;
         bytes32 preNewStateHash = bytes32(uint256(1));
 
         closeOrder(
@@ -931,14 +934,14 @@ contract UntronCoreTest is Test {
                 bytes32(0), // oldBlockId
                 preNewBlockId, // newBlockId
                 block.timestamp - 1, // newTimestamp
-                bytes32(0), // oldLatestClosedOrder
-                preNewLatestClosedOrder, // newLatestClosedOrder
+                bytes32(0), // oldlatestPerformedAction
+                preNewlatestPerformedAction, // newlatestPerformedAction
                 bytes32(0), // oldStateHash
                 preNewStateHash, // newStateHash
                 preClosedOrders // closedOrders
             )
         );
-        
+
         // Set up provider, create order, and fulfill order
         bytes32 orderId = createOrder(user, provider, receiver);
         fulfillOrder(fulfiller, receiver);
@@ -958,8 +961,8 @@ contract UntronCoreTest is Test {
             preNewBlockId, // oldBlockId
             bytes32(uint256(2)), // newBlockId
             block.timestamp + 1, // newTimestamp
-            preNewLatestClosedOrder, // oldLatestClosedOrder
-            orderId, // newLatestClosedOrder
+            preNewlatestPerformedAction, // oldlatestPerformedAction
+            orderId, // newlatestPerformedAction
             preNewStateHash, // oldStateHash
             bytes32(uint256(2)), // newStateHash
             closedOrders // closedOrders
@@ -972,7 +975,7 @@ contract UntronCoreTest is Test {
         // Then
         // Check state updates
         assertEq(untron.blockId(), bytes32(uint256(2)));
-        assertEq(untron.latestClosedOrder(), orderId);
+        assertEq(untron.latestPerformedAction(), orderId);
         assertEq(untron.stateHash(), bytes32(uint256(2)));
 
         // Check balance changes
@@ -1002,7 +1005,7 @@ contract UntronCoreTest is Test {
         preClosedOrders[0] = IUntronCore.Inflow({order: preOrderId, inflow: 500e6});
 
         bytes32 preNewBlockId = bytes32(uint256(1));
-        bytes32 preNewLatestClosedOrder = preOrderId;
+        bytes32 preNewlatestPerformedAction = preOrderId;
         bytes32 preNewStateHash = bytes32(uint256(1));
 
         closeOrder(
@@ -1010,14 +1013,14 @@ contract UntronCoreTest is Test {
                 bytes32(0), // oldBlockId
                 preNewBlockId, // newBlockId
                 block.timestamp - 1, // newTimestamp
-                bytes32(0), // oldLatestClosedOrder
-                preNewLatestClosedOrder, // newLatestClosedOrder
+                bytes32(0), // oldlatestPerformedAction
+                preNewlatestPerformedAction, // newlatestPerformedAction
                 bytes32(0), // oldStateHash
                 preNewStateHash, // newStateHash
                 preClosedOrders // closedOrders
             )
         );
-        
+
         // Set up provider, create order, and fulfill order
         bytes32 orderId = createOrder(user, provider, receiver);
         fulfillOrder(fulfiller, receiver);
@@ -1032,8 +1035,8 @@ contract UntronCoreTest is Test {
             preNewBlockId, // oldBlockId
             bytes32(uint256(2)), // newBlockId
             block.timestamp + 1, // newTimestamp
-            preNewLatestClosedOrder, // oldLatestClosedOrder
-            orderId, // newLatestClosedOrder
+            preNewlatestPerformedAction, // oldlatestPerformedAction
+            orderId, // newlatestPerformedAction
             preNewStateHash, // oldStateHash
             bytes32(uint256(2)), // newStateHash
             closedOrders // closedOrders
@@ -1064,8 +1067,8 @@ contract UntronCoreTest is Test {
             bytes32(uint256(1)), // oldBlockId
             bytes32(uint256(2)), // newBlockId
             block.timestamp - 1, // newTimestamp
-            bytes32(0), // oldLatestClosedOrder
-            orderId, // newLatestClosedOrder
+            bytes32(0), // oldlatestPerformedAction
+            orderId, // newlatestPerformedAction
             bytes32(0), // oldStateHash
             bytes32(uint256(1)), // newStateHash
             closedOrders // closedOrders
@@ -1080,7 +1083,7 @@ contract UntronCoreTest is Test {
         vm.stopPrank();
     }
 
-    function test_closeOrders_RevertIf_OldLatestClosedOrderIsNotLatestZKProvenClosedOrder() public {
+    function test_closeOrders_RevertIf_OldlatestPerformedActionIsNotLatestZKProvenClosedOrder() public {
         // Given
         // Set up provider, create order, and fulfill order
         bytes32 orderId = createOrder(user, provider, receiver);
@@ -1096,8 +1099,8 @@ contract UntronCoreTest is Test {
             bytes32(uint256(1)), // newBlockId
             block.timestamp - 1, // newTimestamp
             // Should be 0, but we set it to 1 to make it invalid
-            bytes32(uint256(1)), // oldLatestClosedOrder
-            orderId, // newLatestClosedOrder
+            bytes32(uint256(1)), // oldlatestPerformedAction
+            orderId, // newlatestPerformedAction
             bytes32(0), // oldStateHash
             bytes32(uint256(1)), // newStateHash
             closedOrders // closedOrders
@@ -1112,7 +1115,9 @@ contract UntronCoreTest is Test {
         vm.stopPrank();
     }
 
-    function test_closeOrders_RevertIf_NewZKProvenLatestClosedOrderTimestampIsNotGreaterThanBlockTimestamp() public {
+    function test_closeOrders_RevertIf_NewZKProvenlatestPerformedActionTimestampIsNotGreaterThanBlockTimestamp()
+        public
+    {
         // Given
         // Close order once to set a valid lastRelayerActivity
         address preProvider = address(102);
@@ -1127,7 +1132,7 @@ contract UntronCoreTest is Test {
         preClosedOrders[0] = IUntronCore.Inflow({order: preOrderId, inflow: 500e6});
 
         bytes32 preNewBlockId = bytes32(uint256(1));
-        bytes32 preNewLatestClosedOrder = preOrderId;
+        bytes32 preNewlatestPerformedAction = preOrderId;
         bytes32 preNewStateHash = bytes32(uint256(1));
 
         closeOrder(
@@ -1135,14 +1140,14 @@ contract UntronCoreTest is Test {
                 bytes32(0), // oldBlockId
                 preNewBlockId, // newBlockId
                 block.timestamp, // newTimestamp
-                bytes32(0), // oldLatestClosedOrder
-                preNewLatestClosedOrder, // newLatestClosedOrder
+                bytes32(0), // oldlatestPerformedAction
+                preNewlatestPerformedAction, // newlatestPerformedAction
                 bytes32(0), // oldStateHash
                 preNewStateHash, // newStateHash
                 preClosedOrders // closedOrders
             )
         );
-        
+
         // Set up provider, create order, and fulfill order
         bytes32 orderId = createOrder(user, provider, receiver);
         fulfillOrder(fulfiller, receiver);
@@ -1158,8 +1163,8 @@ contract UntronCoreTest is Test {
             // Should be block.timestamp, but we set it to block.timestamp + 100000000000000000 so that there is no
             // new order that was included after the last closed order
             block.timestamp + 100000000000000000, // newTimestamp
-            preNewLatestClosedOrder, // oldLatestClosedOrder
-            orderId, // newLatestClosedOrder
+            preNewlatestPerformedAction, // oldlatestPerformedAction
+            orderId, // newlatestPerformedAction
             preNewStateHash, // oldStateHash
             bytes32(uint256(2)), // newStateHash
             closedOrders // closedOrders
@@ -1189,7 +1194,7 @@ contract UntronCoreTest is Test {
         preClosedOrders[0] = IUntronCore.Inflow({order: preOrderId, inflow: 500e6});
 
         bytes32 preNewBlockId = bytes32(uint256(1));
-        bytes32 preNewLatestClosedOrder = preOrderId;
+        bytes32 preNewlatestPerformedAction = preOrderId;
         bytes32 preNewStateHash = bytes32(uint256(1));
 
         closeOrder(
@@ -1197,14 +1202,14 @@ contract UntronCoreTest is Test {
                 bytes32(0), // oldBlockId
                 preNewBlockId, // newBlockId
                 block.timestamp, // newTimestamp
-                bytes32(0), // oldLatestClosedOrder
-                preNewLatestClosedOrder, // newLatestClosedOrder
+                bytes32(0), // oldlatestPerformedAction
+                preNewlatestPerformedAction, // newlatestPerformedAction
                 bytes32(0), // oldStateHash
                 preNewStateHash, // newStateHash
                 preClosedOrders // closedOrders
             )
         );
-        
+
         // Set up provider, create order, and fulfill order
         bytes32 orderId = createOrder(user, provider, receiver);
         fulfillOrder(fulfiller, receiver);
@@ -1218,8 +1223,8 @@ contract UntronCoreTest is Test {
             preNewBlockId, // oldBlockId
             bytes32(uint256(2)), // newBlockId
             block.timestamp + 1, // newTimestamp
-            preNewLatestClosedOrder, // oldLatestClosedOrder
-            orderId, // newLatestClosedOrder
+            preNewlatestPerformedAction, // oldlatestPerformedAction
+            orderId, // newlatestPerformedAction
             // Should be preNewStateHash, but we set it to 0 to make it invalid
             bytes32(uint256(150)), // oldStateHash
             bytes32(uint256(2)), // newStateHash
@@ -1279,7 +1284,7 @@ contract UntronCoreTest is Test {
         assertEq(usdt.balanceOf(provider), 500e6);
         assertEq(usdt.balanceOf(address(untron)), 500e6);
     }
-     
+
     function test_setProvider_SetProviderDetailsWithMoreLiquidityToAddLiquidity() public {
         // Given
         // Provide 1000 USDT to contract from provider

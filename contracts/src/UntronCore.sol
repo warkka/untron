@@ -76,22 +76,22 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         return _orders[orderId];
     }
 
-    /// @notice Updates the order chain and returns the new order ID.
+    /// @notice Updates the action chain and returns the new tip.
     /// @param receiver The address of the receiver.
     /// @param minDeposit The minimum deposit amount.
-    /// @return orderId The new order ID.
-    function updateOrderChain(address receiver, uint256 minDeposit) internal returns (bytes32 orderId) {
-        // order ID is a chained hash of the previous latest order ID, the current block timestamp,
-        // the receiver address, and the minimum deposit amount, ABI-encoded and SHA256 hashed.
-        // Tron-format timestamp is used because we use the order chain in the ZK circuit which accepts Tron block data.
+    /// @return _actionChainTip The new action chain tip.
+    function updateActionChain(address receiver, uint256 minDeposit) internal returns (bytes32 _actionChainTip) {
+        // action chain is a hash chain of the order-related, onchain-initiated actions.
+        // Action consists of timestamp in Tron format, Tron receiver address, and minimum deposit amount.
+        // It's used to start and stop orders. If the order is stopped, minimum deposit amount is not used.
+        // We're utilizing Tron timestamp to enforce the ZK program to follow all Untron actions respective to the Tron blockchain.
         // ABI: (bytes32, uint256, address, uint256)
         uint256 tronTimestamp = unixToTron(block.timestamp);
-        orderId = sha256(abi.encode(latestOrder, tronTimestamp, receiver, minDeposit));
+        _actionChainTip = sha256(abi.encode(actionChainTip, tronTimestamp, receiver, minDeposit));
         // latestOrder stores the latest order ID, that is, the tip of the order chain.
-        latestOrder = orderId;
+        actionChainTip = _actionChainTip;
 
-        // Emit OrderChainUpdated event
-        emit OrderChainUpdated(orderId, tronTimestamp, receiver, minDeposit);
+        emit ActionChainUpdated(_actionChainTip, tronTimestamp, receiver, minDeposit);
     }
 
     /// @notice Creates an order with no checks.
@@ -130,16 +130,17 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         // subtract the amount from the provider's liquidity
         _providers[provider].liquidity -= amount;
 
-        // get the previous order ID
-        bytes32 prevOrder = latestOrder;
-        // create the order ID and update the order chain
-        bytes32 orderId = updateOrderChain(receiver, providerMinDeposit);
+        // get the previous action
+        bytes32 prevAction = latestPerformedAction;
+        // create the order ID and update the action chain.
+        // order ID is the tip of the action chain when the order was created.
+        bytes32 orderId = updateActionChain(receiver, providerMinDeposit);
         // set the receiver as busy to prevent double orders
         _isReceiverBusy[receiver] = orderId;
         uint256 timestamp = unixToTron(block.timestamp);
         // store the order details in storage
         _orders[orderId] = Order({
-            prevOrder: prevOrder,
+            parent: prevAction,
             timestamp: timestamp,
             creator: creator,
             provider: provider,
@@ -207,7 +208,9 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     /// @param transfer The new transfer details.
     /// @dev The transfer details can only be changed before the order is fulfilled.
     function changeOrder(bytes32 orderId, Transfer calldata transfer) external {
-        require(_orders[orderId].creator == msg.sender && !_orders[orderId].isFulfilled, "Only creator can change the order");
+        require(
+            _orders[orderId].creator == msg.sender && !_orders[orderId].isFulfilled, "Only creator can change the order"
+        );
 
         // change the transfer details
         _orders[orderId].transfer = transfer;
@@ -225,10 +228,12 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     ///      Stopping means that the order no longer needs listening for new USDT Tron transfers
     ///      and won't be fulfilled.
     function stopOrder(bytes32 orderId) external {
-        require(_orders[orderId].creator == msg.sender && !_orders[orderId].isFulfilled, "Only creator can stop the order");
+        require(
+            _orders[orderId].creator == msg.sender && !_orders[orderId].isFulfilled, "Only creator can stop the order"
+        );
 
-        // update the order chain with stop notifier
-        updateOrderChain(_orders[orderId].receiver, 0);
+        // update the action chain with stop action
+        updateActionChain(_orders[orderId].receiver, 0);
         // set the receiver as not busy because the order is stopped
         _isReceiverBusy[_orders[orderId].receiver] = bytes32(0);
 
@@ -304,7 +309,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
 
             // get the active order ID for the receiver
             Order memory order = _orders[activeOrderId];
-            
+
             (uint256 amount,) = _getAmountAndFee(order);
 
             // account for the spent amount in our accounting variable
@@ -313,8 +318,8 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
             // perform the transfer
             smartTransfer(order.transfer, amount);
 
-            // update order chain to free the receiver
-            updateOrderChain(_receivers[i], 0);
+            // update action chain to free the receiver address
+            updateActionChain(_receivers[i], 0);
 
             // update the order details
 
@@ -384,13 +389,13 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
             bytes32 newBlockId,
             // new timestamp is the timestamp of the new latest (zk proven) block of Tron blockchain
             uint256 newTimestamp,
-            // "old latest closed order" is the tip of the order chain that was ZK proven last time
-            bytes32 oldLatestClosedOrder,
-            // "new latest closed order" is the tip of the order chain that is being ZK proven now.
-            // it's not necessarily the latest order chain, because the relayer might have
-            // ZK proven some old orders when the new ones were created.
-            // however, the new closed tip must have been the order chain tip at some point.
-            bytes32 newLatestClosedOrder,
+            // "previous performed action" is the latest action that was ZK proven last time
+            bytes32 prevPerformedAction,
+            // "new performed action" is the latest action from the action chain that is ZK proven now.
+            // it's not necessarily the latest action chain, because the relayer might have
+            // ZK proven some old actions when the new ones were created.
+            // however, the new performed action must have been the action chain tip at some point.
+            bytes32 newPerformedAction,
             // old state hash is the state print from the previous run of the ZK program.
             bytes32 oldStateHash,
             // new state hash is the state print from the new run of the ZK program.
@@ -401,19 +406,25 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
 
         // check that the old block ID is the latest block ID that was ZK proven (blockId)
         require(oldBlockId == blockId, "Public input block id is not the latest ZK proven block id");
-        // check that the old order chain is the tip of the order chain that was ZK proven last time
-        require(oldLatestClosedOrder == latestClosedOrder, "Public input latest closed order is not the latest ZK proven order");
+        // check that the old action chain is the latest ZK proven action
+        require(
+            prevPerformedAction == latestPerformedAction,
+            "Public input previous performed action is not the latest ZK proven action"
+        );
         // require that the timestamp of the latest closed order is greater than or equal
         // to the timestamp of the new latest (zk proven) block of Tron blockchain.
         // this is needed to prevent the relayer from censoring orders until they expire.
-        require(_orders[newLatestClosedOrder].timestamp >= newTimestamp, "Latest closed order is required to be after latest ZK proven block timestamp");
+        require(
+            _orders[newPerformedAction].timestamp >= newTimestamp,
+            "Latest action is required to happen after the timestamp of the latest ZK proven Tron block"
+        );
         // check that the old state hash is equal to the current state hash
         // this is needed to prevent the relayer from modifying the state in the ZK program.
         require(oldStateHash == stateHash);
 
         // update the block ID, latest closed order and state hash
         blockId = newBlockId;
-        latestClosedOrder = newLatestClosedOrder;
+        latestPerformedAction = newPerformedAction;
         stateHash = newStateHash;
 
         // this variable is used to calculate the total fee that the relayer will receive
@@ -450,7 +461,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         internalTransfer(msg.sender, totalFee);
 
         // emit the RelayUpdated event
-        emit RelayUpdated(msg.sender, blockId, latestClosedOrder, stateHash);
+        emit RelayUpdated(msg.sender, blockId, latestPerformedAction, stateHash);
     }
 
     /// @notice Sets the liquidity provider details.
@@ -505,7 +516,10 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
 
         // check that the receivers are not already owned by another provider
         for (uint256 i = 0; i < receivers.length; i++) {
-            require(_receiverOwners[receivers[i]] == address(0) || _receiverOwners[receivers[i]] == msg.sender, "Receiver is already owned by another provider");
+            require(
+                _receiverOwners[receivers[i]] == address(0) || _receiverOwners[receivers[i]] == msg.sender,
+                "Receiver is already owned by another provider"
+            );
             // set the receiver owner
             _receiverOwners[receivers[i]] = msg.sender;
         }
