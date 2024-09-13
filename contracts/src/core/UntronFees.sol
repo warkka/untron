@@ -17,23 +17,21 @@ abstract contract UntronFees is IUntronFees, UntronTools, Initializable, UntronS
     /// @param _feePoint The basic fee point used to calculate the fee per transfer.
 
     function __UntronFees_init(uint256 _relayerFee, uint256 _feePoint) internal onlyInitializing {
-        // initialize UntronState
-        __UntronState_init();
-
-        // set relayer fee
-        relayerFee = _relayerFee;
-        // set fee point
-        feePoint = _feePoint;
+        _setFeesVariables(_relayerFee, _feePoint);
     }
 
     // UntronFees variables
     uint256 public relayerFee; // percents
     uint256 public feePoint; // approx fee per ERC20 transfer in USD
 
-    /// @inheritdoc IUntronFees
-    function setFeesVariables(uint256 _relayerFee, uint256 _feePoint) external override onlyRole(UPGRADER_ROLE) {
+    function _setFeesVariables(uint256 _relayerFee, uint256 _feePoint) internal {
         relayerFee = _relayerFee;
         feePoint = _feePoint;
+    }
+
+    /// @inheritdoc IUntronFees
+    function setFeesVariables(uint256 _relayerFee, uint256 _feePoint) external override onlyRole(UPGRADER_ROLE) {
+        _setFeesVariables(_relayerFee, _feePoint);
     }
 
     /// @notice Calculates the fee for the transfer.

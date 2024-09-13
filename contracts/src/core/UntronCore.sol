@@ -11,44 +11,45 @@ import "./UntronTools.sol";
 import "./UntronFees.sol";
 import "./UntronZK.sol";
 
-/// @title Main smart contract for Untron
+/// @title Core logic for Untron protocol
 /// @author Ultrasound Labs
-/// @notice This contract is the main entry point for implementation of the Untron protocol.
+/// @notice This contract contains the main logic of the Untron protocol.
 ///         It's designed to be fully upgradeable and modular, with each module being a separate contract.
-contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUntronCore, UUPSUpgradeable {
-    /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
-        _disableInitializers();
-    }
-
-    /// @notice Initializes the contract with the provided parameters.
+abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUntronCore {
+    /// @notice Initializes the core with the provided parameters.
     /// @param _spokePool The address of the Across bridge's SpokePool contract.
     /// @param _usdt The address of the USDT token.
     /// @param _swapper The address of the contract implementing swap logic.
+    /// @param _relayerFee The fee charged by the relayer, in percents.
+    /// @param _feePoint The basic fee point used to calculate the fee per transfer.
+    /// @param _verifier The address of the ZK proof verifier.
+    /// @param _vkey The vkey of the ZK program.
     /// @dev This function grants the DEFAULT_ADMIN_ROLE and UPGRADER_ROLE to the msg.sender.
     ///      Upgrader role allows to upgrade the contract and dynamic values (see UntronState)
-    function initialize(address _spokePool, address _usdt, address _swapper) public initializer {
+    function __UntronCore_init(
+        address _spokePool,
+        address _usdt,
+        address _swapper,
+        uint256 _relayerFee,
+        uint256 _feePoint,
+        address _verifier,
+        bytes32 _vkey
+    ) public onlyInitializing {
         // initialize Access Control
         __AccessControl_init();
-        // initialize UUPS
-        __UUPSUpgradeable_init();
-
-        // initialize UntronState
-        __UntronState_init();
 
         // initialize UntronTransfers
         __UntronTransfers_init(_spokePool, _usdt, _swapper);
 
         // initialize UntronFees
-        __UntronFees_init(100, 10000); // 0.01% relayer fee, 0.01 USDT fee point
+        __UntronFees_init(_relayerFee, _feePoint);
 
         // initialize UntronZK
-        __UntronZK_init();
+        __UntronZK_init(_verifier, _vkey);
 
         // grant all necessary roles to msg.sender
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(UPGRADER_ROLE, msg.sender);
-        _grantRole(UNLIMITED_CREATOR_ROLE, msg.sender);
     }
 
     // UntronCore variables
@@ -128,7 +129,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     ///                 They'll be used in the fulfill or closeOrders functions to send respective
     ///                 USDT L2 to the order creator or convert them into whatever the order creator wants to receive
     ///                 for their USDT Tron.
-    /// @dev This function must only be called in the createOrder and createOrderUnlimited functions.
+    /// @dev This function must only be called in the createOrder function.
     function _createOrder(
         address creator,
         address provider,
@@ -178,40 +179,28 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         emit OrderCreated(orderId, timestamp, creator, provider, receiver, size, rate, providerMinDeposit);
     }
 
-    /// @inheritdoc IUntronCore
-    function createOrder(address provider, address receiver, uint256 size, uint256 rate, Transfer calldata transfer)
-        external
-        ratePer(maxSponsorships, per, true)
-    {
-        // proceed with order creation (rate limiting is done in the modifier)
-        _createOrder(msg.sender, provider, receiver, size, rate, transfer);
-    }
-
-    /// @notice Access Control role for unlimited order creation.
-    /// @dev This role will be delegated to Untron team for integrations with projects not on ZKsync Era
-    ///      so they could create orders on behalf of the protocol without creating accounts on Era.
-    ///      We expect this design to be temporary and to be replaced with a more flexible and secure
-    ///      design in the future.
-    bytes32 public constant UNLIMITED_CREATOR_ROLE = keccak256("UNLIMITED_CREATOR_ROLE");
-
-    /// @notice Unlimited order creation function
+    /// @notice Checks if the order can be created.
     /// @param provider The address of the liquidity provider owning the Tron receiver address.
     /// @param receiver The address of the Tron receiver address
     ///                that's used to perform a USDT transfer on Tron.
     /// @param size The maximum size of the order in USDT L2.
     /// @param rate The "USDT L2 per 1 USDT Tron" rate of the order.
     /// @param transfer The transfer details.
-    ///                 They'll be used in the fulfill or closeOrders functions to send respective
-    ///                 USDT L2 to the order creator or convert them into to whatever the order creator wants to receive
-    ///                 for their USDT Tron.
-    function createOrderUnlimited(
-        address provider,
-        address receiver,
-        uint256 size,
-        uint256 rate,
-        Transfer calldata transfer
-    ) external onlyRole(UNLIMITED_CREATOR_ROLE) {
-        // proceed with order creation (no rate limiting because the initiator is trusted)
+    /// @return True if the order can be created, false otherwise.
+    /// @dev In Untron V1, this function implements rate limiting using Accounts library.
+    ///      In the future, we plan to move Untron to a B2B model where each project will create
+    ///      orders for their business logic. This abstraction allows to conveniently move from
+    ///      rate limiting without changing the codebase.
+    function _canCreateOrder(address provider, address receiver, uint256 size, uint256 rate, Transfer memory transfer)
+        internal
+        virtual
+        returns (bool);
+
+    /// @inheritdoc IUntronCore
+    function createOrder(address provider, address receiver, uint256 size, uint256 rate, Transfer calldata transfer)
+        external
+    {
+        require(_canCreateOrder(provider, receiver, size, rate, transfer), "Cannot create order");
         _createOrder(msg.sender, provider, receiver, size, rate, transfer);
     }
 
@@ -539,9 +528,4 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         // Emit ProviderUpdated event
         emit ProviderUpdated(msg.sender, liquidity, rate, minOrderSize, minDeposit);
     }
-
-    /// @notice Authorizes the upgrade of the contract.
-    /// @param newImplementation The address of the new implementation.
-    /// @dev This is a UUPS-related function.
-    function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {}
 }

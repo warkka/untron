@@ -24,13 +24,7 @@ abstract contract UntronTransfers is IUntronTransfers, UntronTools, Initializabl
     /// @param _swapper The address of the contract implementing swap logic.
     ///                  In our case, it's 1inch V6 aggregation router.
     function __UntronTransfers_init(address _spokePool, address _usdt, address _swapper) internal onlyInitializing {
-        // initialize the state
-        __UntronState_init();
-
-        // set the parameters (see UntronState)
-        spokePool = _spokePool;
-        usdt = _usdt;
-        swapper = _swapper;
+        _setTransfersVariables(_usdt, _spokePool, _swapper);
     }
 
     // UntronTransfers variables
@@ -38,15 +32,19 @@ abstract contract UntronTransfers is IUntronTransfers, UntronTools, Initializabl
     address public spokePool;
     address public swapper;
 
+    function _setTransfersVariables(address _usdt, address _spokePool, address _swapper) internal {
+        usdt = _usdt;
+        spokePool = _spokePool;
+        swapper = _swapper;
+    }
+
     /// @inheritdoc IUntronTransfers
     function setTransfersVariables(address _usdt, address _spokePool, address _swapper)
         external
         override
         onlyRole(UPGRADER_ROLE)
     {
-        usdt = _usdt;
-        spokePool = _spokePool;
-        swapper = _swapper;
+        _setTransfersVariables(_usdt, _spokePool, _swapper);
     }
 
     /// @notice Swaps USDT to the desired token specified in the transfer.
