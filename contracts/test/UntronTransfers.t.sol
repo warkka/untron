@@ -81,4 +81,29 @@ contract UntronTransfersTest is Test {
         vm.expectRevert();
         untronTransfers.withdrawLeftovers();
     }
+
+    function test_setUntronTransfersVariables_SetVariables() public {
+        vm.startPrank(admin);
+
+        address usdtAddress = address(usdt);
+        address spokePoolAddress = address(spokePool);
+        address aggregationRouterAddress = address(aggregationRouter);
+
+        untronTransfers.setTransfersVariables(usdtAddress, spokePoolAddress, aggregationRouterAddress);
+
+        assertEq(untronTransfers.usdt(), usdtAddress);
+        assertEq(untronTransfers.spokePool(), spokePoolAddress);
+        assertEq(untronTransfers.swapper(), aggregationRouterAddress);
+
+        vm.stopPrank();
+    }
+
+    function test_setUntronTransfersVariables_RevertIf_NotUpgraderRole() public {
+        address usdtAddress = address(usdt);
+        address spokePoolAddress = address(spokePool);
+        address aggregationRouterAddress = address(aggregationRouter);
+
+        vm.expectRevert();
+        untronTransfers.setTransfersVariables(usdtAddress, spokePoolAddress, aggregationRouterAddress);
+    }
 }

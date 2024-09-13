@@ -18,9 +18,9 @@ contract MockUSDT is ERC20 {
     }
 }
 
-contract UntronStateTest is Test {
-    UntronState untronStateImplementation;
-    UntronState untronState;
+contract UntronFeesTest is Test {
+    UntronFees untronFeesImplementation;
+    UntronFees untronFees;
     MockSpokePool spokePool;
     MockAggregationRouter aggregationRouter;
     SP1MockVerifier sp1Verifier;
@@ -41,44 +41,44 @@ contract UntronStateTest is Test {
         usdt = new MockUSDT();
 
         // Use UntronCore since UntronFees is abstract
-        untronStateImplementation = new UntronCore();
+        untronFeesImplementation = new UntronCore();
         // Prepare the initialization data
         bytes memory initData = abi.encodeWithSelector(
             UntronCore.initialize.selector, address(spokePool), address(usdt), address(aggregationRouter)
         );
 
         // Deploy the proxy, pointing to the implementation and passing the init data
-        ERC1967Proxy proxy = new ERC1967Proxy(address(untronStateImplementation), initData);
-        untronState = UntronState(address(proxy));
-        untronState.grantRole(untronState.UPGRADER_ROLE(), admin);
+        ERC1967Proxy proxy = new ERC1967Proxy(address(untronFeesImplementation), initData);
+        untronFees = UntronFees(address(proxy));
+        untronFees.grantRole(untronFees.UPGRADER_ROLE(), admin);
 
         vm.stopPrank();
     }
 
     function test_setUp() public view {
         // Check role
-        assertEq(untronState.hasRole(untronState.UPGRADER_ROLE(), admin), true);
+        assertEq(untronFees.hasRole(untronFees.UPGRADER_ROLE(), admin), true);
     }
 
-    function test_changeRateLimit_SetRateLimit() public {
+    function test_setUntronFeesVariables_SetVariables() public {
         vm.startPrank(admin);
 
-        uint256 rateLimit = 10;
-        uint256 rateLimitPeriod = 24 hours;
+        uint256 relayerFee = 100;
+        uint256 feePoint = 100;
 
-        untronState.changeRateLimit(rateLimit, rateLimitPeriod);
+        untronFees.setFeesVariables(relayerFee, feePoint);
 
-        assertEq(untronState.maxSponsorships(), rateLimit);
-        assertEq(untronState.per(), rateLimitPeriod);
+        assertEq(untronFees.relayerFee(), relayerFee);
+        assertEq(untronFees.feePoint(), feePoint);
 
         vm.stopPrank();
     }
 
-    function test_changeRateLimit_RevertIf_NotUpgraderRole() public {
-        uint256 rateLimit = 10;
-        uint256 rateLimitDuration = 24 hours;
+    function test_setUntronFeesVariables_RevertIf_NotUpgraderRole() public {
+        uint256 relayerFee = 100;
+        uint256 feePoint = 100;
 
         vm.expectRevert();
-        untronState.changeRateLimit(rateLimit, rateLimitDuration);
+        untronFees.setFeesVariables(relayerFee, feePoint);
     }
 }

@@ -18,9 +18,9 @@ contract MockUSDT is ERC20 {
     }
 }
 
-contract UntronStateTest is Test {
-    UntronState untronStateImplementation;
-    UntronState untronState;
+contract UntronZKTest is Test {
+    UntronZK untronZKImplementation;
+    UntronZK untronZK;
     MockSpokePool spokePool;
     MockAggregationRouter aggregationRouter;
     SP1MockVerifier sp1Verifier;
@@ -41,44 +41,44 @@ contract UntronStateTest is Test {
         usdt = new MockUSDT();
 
         // Use UntronCore since UntronFees is abstract
-        untronStateImplementation = new UntronCore();
+        untronZKImplementation = new UntronCore();
         // Prepare the initialization data
         bytes memory initData = abi.encodeWithSelector(
             UntronCore.initialize.selector, address(spokePool), address(usdt), address(aggregationRouter)
         );
 
         // Deploy the proxy, pointing to the implementation and passing the init data
-        ERC1967Proxy proxy = new ERC1967Proxy(address(untronStateImplementation), initData);
-        untronState = UntronState(address(proxy));
-        untronState.grantRole(untronState.UPGRADER_ROLE(), admin);
+        ERC1967Proxy proxy = new ERC1967Proxy(address(untronZKImplementation), initData);
+        untronZK = UntronZK(address(proxy));
+        untronZK.grantRole(untronZK.UPGRADER_ROLE(), admin);
 
         vm.stopPrank();
     }
 
     function test_setUp() public view {
         // Check role
-        assertEq(untronState.hasRole(untronState.UPGRADER_ROLE(), admin), true);
+        assertEq(untronZK.hasRole(untronZK.UPGRADER_ROLE(), admin), true);
     }
 
-    function test_changeRateLimit_SetRateLimit() public {
+    function test_setUntronZKVariables_SetVariables() public {
         vm.startPrank(admin);
 
-        uint256 rateLimit = 10;
-        uint256 rateLimitPeriod = 24 hours;
+        address verifier = address(sp1Verifier);
+        bytes32 vkey = bytes32(uint256(1));
 
-        untronState.changeRateLimit(rateLimit, rateLimitPeriod);
+        untronZK.setZKVariables(verifier, vkey);
 
-        assertEq(untronState.maxSponsorships(), rateLimit);
-        assertEq(untronState.per(), rateLimitPeriod);
+        assertEq(untronZK.verifier(), verifier);
+        assertEq(untronZK.vkey(), vkey);
 
         vm.stopPrank();
     }
 
-    function test_changeRateLimit_RevertIf_NotUpgraderRole() public {
-        uint256 rateLimit = 10;
-        uint256 rateLimitDuration = 24 hours;
+    function test_setUntronZKVariables_RevertIf_NotUpgraderRole() public {
+        address verifier = address(sp1Verifier);
+        bytes32 vkey = bytes32(uint256(1));
 
         vm.expectRevert();
-        untronState.changeRateLimit(rateLimit, rateLimitDuration);
+        untronZK.setZKVariables(verifier, vkey);
     }
 }

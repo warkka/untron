@@ -1371,4 +1371,24 @@ contract UntronCoreTest is Test {
 
         vm.stopPrank();
     }
+
+    function test_setUntronCoreVariables_SetVariables() public {
+        vm.startPrank(admin);
+
+        bytes32 blockId = bytes32(uint256(1));
+        bytes32 actionChainTip = bytes32(uint256(2));
+        bytes32 latestPerformedAction = bytes32(uint256(3));
+        bytes32 stateHash = bytes32(uint256(4));
+        uint256 maxOrderSize = 100;
+
+        untron.setCoreVariables(blockId, actionChainTip, latestPerformedAction, stateHash, maxOrderSize);
+
+        assertEq(untron.blockId(), blockId);
+        assertEq(untron.actionChainTip(), actionChainTip);
+        assertEq(untron.latestPerformedAction(), latestPerformedAction);
+        assertEq(untron.stateHash(), stateHash);
+        assertEq(untron.maxOrderSize(), maxOrderSize);
+
+        vm.stopPrank();
+    }
 }
