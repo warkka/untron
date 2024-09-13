@@ -51,6 +51,28 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         _grantRole(UNLIMITED_CREATOR_ROLE, msg.sender);
     }
 
+    // UntronCore variables
+    bytes32 public blockId;
+    bytes32 public actionChainTip;
+    bytes32 public latestPerformedAction;
+    bytes32 public stateHash;
+    uint256 public maxOrderSize;
+
+    /// @inheritdoc IUntronCore
+    function setCoreVariables(
+        bytes32 _blockId,
+        bytes32 _actionChainTip,
+        bytes32 _latestPerformedAction,
+        bytes32 _stateHash,
+        uint256 _maxOrderSize
+    ) external onlyRole(UPGRADER_ROLE) {
+        blockId = _blockId;
+        actionChainTip = _actionChainTip;
+        latestPerformedAction = _latestPerformedAction;
+        stateHash = _stateHash;
+        maxOrderSize = _maxOrderSize;
+    }
+
     /// @notice Mapping to store provider details.
     mapping(address => Provider) private _providers;
     /// @notice Mapping to store whether a receiver is busy with an order.
@@ -156,17 +178,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         emit OrderCreated(orderId, timestamp, creator, provider, receiver, size, rate, providerMinDeposit);
     }
 
-    /// @notice Rate-limited order creation function
-    /// @param provider The address of the liquidity provider owning the Tron receiver address.
-    /// @param receiver The address of the Tron receiver address
-    ///                that's used to perform a USDT transfer on Tron.
-    /// @param size The maximum size of the order in USDT L2.
-    /// @param rate The "USDT L2 per 1 USDT Tron" rate of the order.
-    /// @param transfer The transfer details.
-    ///                 They'll be used in the fulfill or closeOrders functions to send respective
-    ///                 USDT L2 to the order creator or convert them into whatever the order creator wants to receive
-    ///                 for their USDT Tron.
-    /// @dev The function is rate-limited based on limits specified in UntronState.
+    /// @inheritdoc IUntronCore
     function createOrder(address provider, address receiver, uint256 size, uint256 rate, Transfer calldata transfer)
         external
         ratePer(maxSponsorships, per, true)

@@ -27,4 +27,10 @@ interface IUntronTransfers {
         // data for the swap. Not used if doSwap is false.
         bytes swapData;
     }
+
+    /// @notice Updates the UntronTransfers-related variables
+    /// @param _usdt The new address of the USDT token
+    /// @param _spokePool The new address of the SpokePool contract
+    /// @param _swapper The new address of the swapper contract
+    function setTransfersVariables(address _usdt, address _spokePool, address _swapper) external;
 }

@@ -25,64 +25,6 @@ abstract contract UntronState is Initializable, AccessControlUpgradeable, Accoun
         _changeRateLimit(10, 24 hours);
     }
 
-    // UntronCore variables
-    bytes32 public blockId;
-    bytes32 public actionChainTip;
-    bytes32 public latestPerformedAction;
-    bytes32 public stateHash;
-    uint256 public maxOrderSize;
-
-    /// @inheritdoc IUntronState
-    function setUntronCoreVariables(
-        bytes32 _blockId,
-        bytes32 _actionChainTip,
-        bytes32 _latestPerformedAction,
-        bytes32 _stateHash,
-        uint256 _maxOrderSize
-    ) external onlyRole(UPGRADER_ROLE) {
-        blockId = _blockId;
-        actionChainTip = _actionChainTip;
-        latestPerformedAction = _latestPerformedAction;
-        stateHash = _stateHash;
-        maxOrderSize = _maxOrderSize;
-    }
-
-    // UntronZK variables
-    address public verifier;
-    bytes32 public vkey;
-
-    /// @inheritdoc IUntronState
-    function setUntronZKVariables(address _verifier, bytes32 _vkey) external override onlyRole(UPGRADER_ROLE) {
-        verifier = _verifier;
-        vkey = _vkey;
-    }
-
-    // UntronFees variables
-    uint256 public relayerFee; // percents
-    uint256 public feePoint; // approx fee per ERC20 transfer in USD
-
-    /// @inheritdoc IUntronState
-    function setUntronFeesVariables(uint256 _relayerFee, uint256 _feePoint) external override onlyRole(UPGRADER_ROLE) {
-        relayerFee = _relayerFee;
-        feePoint = _feePoint;
-    }
-
-    // UntronTransfers variables
-    address public usdt;
-    address public spokePool;
-    address public swapper;
-
-    /// @inheritdoc IUntronState
-    function setUntronTransfersVariables(address _usdt, address _spokePool, address _swapper)
-        external
-        override
-        onlyRole(UPGRADER_ROLE)
-    {
-        usdt = _usdt;
-        spokePool = _spokePool;
-        swapper = _swapper;
-    }
-
     // Accounts variables
     uint256 public maxSponsorships;
     uint256 public per;

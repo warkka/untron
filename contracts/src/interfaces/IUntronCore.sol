@@ -3,11 +3,13 @@ pragma solidity ^0.8.20;
 
 import "./IUntronTransfers.sol";
 import "./IUntronState.sol";
+import "./IUntronZK.sol";
+import "./IUntronFees.sol";
 
 /// @title Interface for the UntronCore contract
 /// @author Ultrasound Labs
 /// @notice This interface defines the functions and structs used in the UntronCore contract.
-interface IUntronCore is IUntronTransfers, IUntronState {
+interface IUntronCore is IUntronTransfers, IUntronFees, IUntronZK, IUntronState {
     /// @notice Struct representing a Tron->L2 order in the Untron protocol
     struct Order {
         // the tip of the action chain before this order was created
@@ -90,4 +92,30 @@ interface IUntronCore is IUntronTransfers, IUntronState {
     function isReceiverBusy(address receiver) external view returns (bytes32);
     function receiverOwners(address receiver) external view returns (address);
     function orders(bytes32 orderId) external view returns (Order memory);
+
+    /// @notice Updates the UntronCore-related variables
+    /// @param _blockId The new block ID of the latest zk proven Tron block
+    /// @param _actionChainTip The new action chain tip
+    /// @param _latestPerformedAction The new latest performed action from the action chain
+    /// @param _stateHash The new hash of the latest state of Untron ZK program
+    function setCoreVariables(
+        bytes32 _blockId,
+        bytes32 _actionChainTip,
+        bytes32 _latestPerformedAction,
+        bytes32 _stateHash,
+        uint256 _maxOrderSize
+    ) external;
+
+    /// @notice The order creation function
+    /// @param provider The address of the liquidity provider owning the Tron receiver address.
+    /// @param receiver The address of the Tron receiver address
+    ///                that's used to perform a USDT transfer on Tron.
+    /// @param size The maximum size of the order in USDT L2.
+    /// @param rate The "USDT L2 per 1 USDT Tron" rate of the order.
+    /// @param transfer The transfer details.
+    ///                 They'll be used in the fulfill or closeOrders functions to send respective
+    ///                 USDT L2 to the order creator or convert them into whatever the order creator wants to receive
+    ///                 for their USDT Tron.
+    function createOrder(address provider, address receiver, uint256 size, uint256 rate, Transfer calldata transfer)
+        external;
 }

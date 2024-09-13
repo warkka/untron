@@ -33,6 +33,22 @@ abstract contract UntronTransfers is IUntronTransfers, UntronTools, Initializabl
         swapper = _swapper;
     }
 
+    // UntronTransfers variables
+    address public usdt;
+    address public spokePool;
+    address public swapper;
+
+    /// @inheritdoc IUntronTransfers
+    function setTransfersVariables(address _usdt, address _spokePool, address _swapper)
+        external
+        override
+        onlyRole(UPGRADER_ROLE)
+    {
+        usdt = _usdt;
+        spokePool = _spokePool;
+        swapper = _swapper;
+    }
+
     /// @notice Swaps USDT to the desired token specified in the transfer.
     /// @param transfer The transfer details.
     /// @param amount The amount of USDT to swap.

@@ -119,10 +119,10 @@ contract UntronCoreTest is Test {
         ERC1967Proxy proxy = new ERC1967Proxy(address(untronImplementation), initData);
         untron = UntronCore(address(proxy));
 
-        untron.setUntronZKVariables(address(sp1Verifier), bytes32(0));
+        untron.setZKVariables(address(sp1Verifier), bytes32(0));
         untron.register(user, ""); // we're registrar so we don't need signature
 
-        untron.setUntronCoreVariables(
+        untron.setCoreVariables(
             bytes32(0), // blockId
             bytes32(0), // actionChainTip
             bytes32(0), // latestPerformedAction
