@@ -4,10 +4,10 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@ultrasoundlabs/accounts/contracts/zksync/AccountsPaymaster.sol";
 import "./core/UntronCore.sol";
+import "./v1/RLPaymaster.sol";
 
-contract UntronV1 is Initializable, AccountsPaymaster, UntronCore, UUPSUpgradeable {
+contract UntronV1 is Initializable, UntronCore, UUPSUpgradeable, RLPaymaster {
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -36,27 +36,21 @@ contract UntronV1 is Initializable, AccountsPaymaster, UntronCore, UUPSUpgradeab
     ///      design in the future.
     bytes32 public constant UNLIMITED_CREATOR_ROLE = keccak256("UNLIMITED_CREATOR_ROLE");
 
-    uint256 public rate;
-    uint256 public per;
-
-    function _changeRate(uint256 _rate, uint256 _per) internal {
-        rate = _rate;
-        per = _per;
-        setPaymasterConfig(_rate, _per, false);
-    }
-
-    function changeRate(uint256 _rate, uint256 _per) external onlyRole(UPGRADER_ROLE) {
-        _changeRate(_rate, _per);
-    }
-
     function _canCreateOrder(address, address, uint256, uint256, Transfer memory)
         internal
         override
         returns (bool result)
     {
-        // TODO: it's messy and i think we should obsolete/rework AccountsPaymaster logic
-        result = hasRole(UNLIMITED_CREATOR_ROLE, msg.sender) || _hasDelayPassed(msg.sender, per, rate, bytes4(0));
-        _logCall(bytes4(0), msg.sender);
+        if (hasRole(UNLIMITED_CREATOR_ROLE, msg.sender)) {
+            result = true;
+        } else if (_hasDelayPassed(_selector(), msg.sender, per, rate)) {
+            if (!isFunded[msg.sender]) {
+                _logCall(msg.sender, _selector());
+            } else {
+                isFunded[msg.sender] = false;
+            }
+            result = true;
+        }
     }
 
     /// @notice Authorizes the upgrade of the contract.

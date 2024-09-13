@@ -2,8 +2,6 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@ultrasoundlabs/accounts/contracts/zksync/AccountsPaymaster.sol";
 import "./interfaces/IUntronState.sol";
 
 /// @title Module for storing Untron's variables

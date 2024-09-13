@@ -2,8 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../src/UntronCore.sol";
-import "../src/UntronTransfers.sol";
+import "../src/core/UntronCore.sol";
+import "../src/core/UntronTransfers.sol";
 import "./mocks/MockSpokePool.sol";
 import "./mocks/MockAggregationRouter.sol";
 import "@sp1-contracts/SP1MockVerifier.sol";
