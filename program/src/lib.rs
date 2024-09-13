@@ -61,6 +61,7 @@ pub struct State {
 // Order is the data of a new order in the Untron protocol.
 // Created in the smart contract and only contains order fields that are needed for the program.
 // All other fields are kept in the smart contract, because the program doesn't need them.
+// This structure is also needed to stop the orders before they become inactive.
 #[derive(Serialize, Deserialize)]
 pub struct Order {
     // timestamp when the order was created in Tron format (not unix timestamp)
@@ -89,8 +90,8 @@ pub struct RawBlock {
 // It's all kept in the private inputs,
 // and the smart contract will only receive the results of the execution.
 pub struct Execution {
-    // new orders that were created in the smart contract
-    pub orders: Vec<Order>,
+    // new actions from the smart contract
+    pub actions: Vec<Order>,
     // new blocks from the Tron blockchain
     pub blocks: Vec<RawBlock>,
 }
@@ -108,25 +109,25 @@ pub fn block_id_to_number(block_id: [u8; 32]) -> u32 {
 // it takes the current state and an execution
 // and returns the new state and the closed orders, then passed to the smart contract.
 pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], u64)> {
-    // iterate over all new orders to form the new order chain
-    for order in execution.orders {
-        // encode the order into the chained ABI format
-        let action = Action::abi_encode(&(
+    // iterate over all new order actions to form the new action chain
+    for action in execution.actions {
+        // encode the action into the chained ABI format
+        let encoded_action = Action::abi_encode(&(
             state.action_chain,
-            order.timestamp,
-            order.address,
-            order.min_deposit,
+            action.timestamp,
+            action.address,
+            action.min_deposit,
         ));
         // hash the chained order and insert it into the state
-        state.action_chain = crypto::hash(&action);
+        state.action_chain = crypto::hash(&encoded_action);
         // insert the order data into the state
         state.orders.insert(
             state.action_chain,
             OrderState {
-                address: order.address,
-                timestamp: order.timestamp,
+                address: action.address,
+                timestamp: action.timestamp,
                 inflow: 0,
-                min_deposit: order.min_deposit,
+                min_deposit: action.min_deposit,
             },
         );
     }

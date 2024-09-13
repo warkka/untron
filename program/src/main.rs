@@ -33,10 +33,10 @@ pub fn main() {
 
     // read the execution payload from stdin
     // INPUT FORMAT:
-    // - orders: Vec<u8> (bincode serialized Vec<Order>)
+    // - actions: Vec<u8> (bincode serialized Vec<Order>)
     // - blocks: Vec<u8> (bincode serialized Vec<RawBlock>)
     let execution = Execution {
-        orders: bincode::deserialize(&read_vec()).unwrap(),
+        actions: bincode::deserialize(&read_vec()).unwrap(),
         blocks: bincode::deserialize(&read_vec()).unwrap(),
     };
 
