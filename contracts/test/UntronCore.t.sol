@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../src/UntronCore.sol";
+import "../src/UntronV1.sol";
 import "./mocks/MockSpokePool.sol";
 import "./mocks/MockAggregationRouter.sol";
 import "@sp1-contracts/SP1MockVerifier.sol";
@@ -18,8 +18,8 @@ contract MockUSDT is ERC20 {
 }
 
 contract UntronCoreTest is Test {
-    UntronCore untronImplementation;
-    UntronCore untron;
+    UntronV1 untronImplementation;
+    UntronV1 untron;
     MockSpokePool spokePool;
     MockAggregationRouter aggregationRouter;
     SP1MockVerifier sp1Verifier;
@@ -109,26 +109,33 @@ contract UntronCoreTest is Test {
         sp1Verifier = new SP1MockVerifier();
         usdt = new MockUSDT();
 
-        untronImplementation = new UntronCore();
+        // Use UntronCore since UntronFees is abstract
+        untronImplementation = new UntronV1();
         // Prepare the initialization data
         bytes memory initData = abi.encodeWithSelector(
-            UntronCore.initialize.selector, address(spokePool), address(usdt), address(aggregationRouter)
+            UntronV1.initialize.selector,
+            bytes32(0), // blockId
+            bytes32(0), // stateHash
+            1000e6, // maxOrderSize
+            address(spokePool),
+            address(usdt),
+            address(aggregationRouter),
+            100, // relayerFee
+            10000, // feePoint
+            address(sp1Verifier),
+            bytes32(0), // vkey
+            10, // rate
+            24 hours // per
         );
 
         // Deploy the proxy, pointing to the implementation and passing the init data
         ERC1967Proxy proxy = new ERC1967Proxy(address(untronImplementation), initData);
-        untron = UntronCore(address(proxy));
+        untron = UntronV1(address(proxy));
+        untron.grantRole(untron.UPGRADER_ROLE(), admin);
+        untron.grantRole(untron.REGISTRAR_ROLE(), admin);
+        untron.grantRole(untron.UNLIMITED_CREATOR_ROLE(), admin);
 
-        untron.setZKVariables(address(sp1Verifier), bytes32(0));
         untron.register(user, ""); // we're registrar so we don't need signature
-
-        untron.setCoreVariables(
-            bytes32(0), // blockId
-            bytes32(0), // actionChainTip
-            bytes32(0), // latestPerformedAction
-            bytes32(0), // stateHash
-            1000e6 // maxOrderSize
-        );
 
         vm.stopPrank();
     }
@@ -144,6 +151,7 @@ contract UntronCoreTest is Test {
 
         assertEq(untron.hasRole(untron.DEFAULT_ADMIN_ROLE(), admin), true);
         assertEq(untron.hasRole(untron.UPGRADER_ROLE(), admin), true);
+        assertEq(untron.hasRole(untron.REGISTRAR_ROLE(), admin), true);
         assertEq(untron.hasRole(untron.UNLIMITED_CREATOR_ROLE(), admin), true);
     }
 
@@ -476,7 +484,7 @@ contract UntronCoreTest is Test {
         vm.stopPrank();
     }
 
-    function test_createOrderUnlimited_CreateOrder() public {
+    function test_createOrder_CreateOrder() public {
         // Given
         // Set up provider
         setupProvider(provider, receiver);
@@ -494,7 +502,7 @@ contract UntronCoreTest is Test {
             swapData: ""
         });
 
-        untron.createOrderUnlimited(provider, receiver, 500e6, 1e6, transfer);
+        untron.createOrder(provider, receiver, 500e6, 1e6, transfer);
         vm.stopPrank();
 
         // Then
@@ -509,7 +517,7 @@ contract UntronCoreTest is Test {
         assertEq(_order.rate, 1e6);
     }
 
-    function test_createOrderUnlimited_CreatesOrderNotRateLimited() public {
+    function test_createOrder_CreatesOrderNotRateLimited() public {
         // Given
         // Set up provider with multiple receivers and custom liquidity
         vm.startPrank(provider);
@@ -538,12 +546,12 @@ contract UntronCoreTest is Test {
         });
 
         for (uint256 i = 0; i < 10; i++) {
-            untron.createOrderUnlimited(provider, receivers[i], 100e6, 1e6, transfer);
+            untron.createOrder(provider, receivers[i], 100e6, 1e6, transfer);
         }
 
         // When
         // No revert should happen
-        untron.createOrderUnlimited(provider, receivers[10], 100e6, 1e6, transfer);
+        untron.createOrder(provider, receivers[10], 100e6, 1e6, transfer);
         vm.stopPrank();
 
         // Then
@@ -558,31 +566,6 @@ contract UntronCoreTest is Test {
             assertEq(_order.size, 100e6);
             assertEq(_order.rate, 1e6);
         }
-    }
-
-    function test_createOrderUnlimited_RevertIf_UserCreatesOrder() public {
-        // Given
-        // Set up provider
-        setupProvider(provider, receiver);
-
-        // When
-        // Try to create order as USER
-        vm.startPrank(user);
-        UntronCore.Transfer memory transfer = IUntronTransfers.Transfer({
-            recipient: user,
-            chainId: block.chainid,
-            acrossFee: 0,
-            doSwap: false,
-            outToken: address(0),
-            minOutputPerUSDT: 0,
-            fixedOutput: false,
-            swapData: ""
-        });
-
-        vm.expectRevert();
-        untron.createOrderUnlimited(provider, receiver, 500e6, 1e6, transfer);
-
-        vm.stopPrank();
     }
 
     function test_changeOrder_ChangeOrder() public {
@@ -950,8 +933,8 @@ contract UntronCoreTest is Test {
         // When
         // Try to close orders again without relayer role
 
-        // Update block timestamp to surpass inactivity period by 3 hours and 1 second
-        vm.warp(block.timestamp + 3 hours + 1);
+        // Update block timestamp to surpass inactivity period by 12 hours and 1 second
+        vm.warp(block.timestamp + 12 hours + 1);
 
         vm.startPrank(user);
         IUntronCore.Inflow[] memory closedOrders = new IUntronCore.Inflow[](1);

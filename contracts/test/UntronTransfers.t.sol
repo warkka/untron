@@ -2,8 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../src/core/UntronCore.sol";
-import "../src/core/UntronTransfers.sol";
+import "../src/UntronV1.sol";
 import "./mocks/MockSpokePool.sol";
 import "./mocks/MockAggregationRouter.sol";
 import "@sp1-contracts/SP1MockVerifier.sol";
@@ -19,8 +18,8 @@ contract MockUSDT is ERC20 {
 }
 
 contract UntronTransfersTest is Test {
-    UntronTransfers untronTransfersImplementation;
-    UntronTransfers untronTransfers;
+    UntronV1 untronTransfersImplementation;
+    UntronV1 untronTransfers;
     MockSpokePool spokePool;
     MockAggregationRouter aggregationRouter;
     SP1MockVerifier sp1Verifier;
@@ -41,16 +40,28 @@ contract UntronTransfersTest is Test {
         usdt = new MockUSDT();
 
         // Use UntronCore since UntronFees is abstract
-        untronTransfersImplementation = new UntronCore();
+        untronTransfersImplementation = new UntronV1();
         // Prepare the initialization data
         bytes memory initData = abi.encodeWithSelector(
-            UntronCore.initialize.selector, address(spokePool), address(usdt), address(aggregationRouter)
+            UntronV1.initialize.selector,
+            bytes32(0), // blockId
+            bytes32(0), // stateHash
+            1000e6, // maxOrderSize
+            address(spokePool),
+            address(usdt),
+            address(aggregationRouter),
+            100, // relayerFee
+            10000, // feePoint
+            address(sp1Verifier),
+            bytes32(0), // vkey
+            10, // rate
+            24 hours // per
         );
 
         // Deploy the proxy, pointing to the implementation and passing the init data
         ERC1967Proxy proxy = new ERC1967Proxy(address(untronTransfersImplementation), initData);
-        untronTransfers = UntronTransfers(address(proxy));
-        untronTransfers.grantRole(untronTransfers.DEFAULT_ADMIN_ROLE(), admin);
+        untronTransfers = UntronV1(address(proxy));
+        untronTransfers.grantRole(untronTransfers.UPGRADER_ROLE(), admin);
 
         vm.stopPrank();
     }

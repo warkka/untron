@@ -2,8 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../src/core/UntronCore.sol";
-import "../src/core/UntronState.sol";
+import "../src/UntronV1.sol";
 import "./mocks/MockSpokePool.sol";
 import "./mocks/MockAggregationRouter.sol";
 import "@sp1-contracts/SP1MockVerifier.sol";
@@ -19,8 +18,8 @@ contract MockUSDT is ERC20 {
 }
 
 contract UntronStateTest is Test {
-    UntronState untronStateImplementation;
-    UntronState untronState;
+    UntronV1 untronStateImplementation;
+    UntronV1 untronState;
     MockSpokePool spokePool;
     MockAggregationRouter aggregationRouter;
     SP1MockVerifier sp1Verifier;
@@ -41,15 +40,27 @@ contract UntronStateTest is Test {
         usdt = new MockUSDT();
 
         // Use UntronCore since UntronFees is abstract
-        untronStateImplementation = new UntronCore();
+        untronStateImplementation = new UntronV1();
         // Prepare the initialization data
         bytes memory initData = abi.encodeWithSelector(
-            UntronCore.initialize.selector, address(spokePool), address(usdt), address(aggregationRouter)
+            UntronV1.initialize.selector,
+            bytes32(0), // blockId
+            bytes32(0), // stateHash
+            1000e6, // maxOrderSize
+            address(spokePool),
+            address(usdt),
+            address(aggregationRouter),
+            100, // relayerFee
+            10000, // feePoint
+            address(sp1Verifier),
+            bytes32(0), // vkey
+            10, // rate
+            24 hours // per
         );
 
         // Deploy the proxy, pointing to the implementation and passing the init data
         ERC1967Proxy proxy = new ERC1967Proxy(address(untronStateImplementation), initData);
-        untronState = UntronState(address(proxy));
+        untronState = UntronV1(address(proxy));
         untronState.grantRole(untronState.UPGRADER_ROLE(), admin);
 
         vm.stopPrank();
@@ -68,7 +79,7 @@ contract UntronStateTest is Test {
 
         untronState.changeRateLimit(rateLimit, rateLimitPeriod);
 
-        assertEq(untronState.maxSponsorships(), rateLimit);
+        assertEq(untronState.rate(), rateLimit);
         assertEq(untronState.per(), rateLimitPeriod);
 
         vm.stopPrank();
