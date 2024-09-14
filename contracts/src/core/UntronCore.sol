@@ -5,7 +5,7 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import "./interfaces/IUntronCore.sol";
+import "../interfaces/core/IUntronCore.sol";
 import "./UntronTransfers.sol";
 import "./UntronTools.sol";
 import "./UntronFees.sol";
@@ -27,6 +27,9 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
     /// @dev This function grants the DEFAULT_ADMIN_ROLE and UPGRADER_ROLE to the msg.sender.
     ///      Upgrader role allows to upgrade the contract and dynamic values (see UntronState)
     function __UntronCore_init(
+        bytes32 _blockId,
+        bytes32 _stateHash,
+        uint256 _maxOrderSize,
         address _spokePool,
         address _usdt,
         address _swapper,
@@ -50,6 +53,10 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         // grant all necessary roles to msg.sender
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(UPGRADER_ROLE, msg.sender);
+
+        blockId = _blockId;
+        stateHash = _stateHash;
+        maxOrderSize = _maxOrderSize;
     }
 
     // UntronCore variables
@@ -358,7 +365,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
     /// @notice The role for the relayers.
     /// @dev Relayer is a role that is responsible for closing the orders.
     ///      They generate and publish ZK proofs for Tron blockchain and its contents, in exchange for a fee (in percents; see relayerFee in UntronState).
-    ///      If all relayers are down for more than 3 hours, relaying becomes permissionless (see lastRelayerActivity).
+    ///      If all relayers are down for more than 12 hours, relaying becomes permissionless (see lastRelayerActivity).
     bytes32 public constant RELAYER_ROLE = keccak256("RELAYER_ROLE");
 
     /// @notice Closes the orders and sends the funds to the providers or order creators, if not fulfilled.
@@ -368,7 +375,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         bool isRelayer = hasRole(RELAYER_ROLE, msg.sender);
         // Check if the sender has the relayer role or if all relayers are inactive
         require(
-            isRelayer || (block.timestamp - lastRelayerActivity > 3 hours),
+            isRelayer || (block.timestamp - lastRelayerActivity > 12 hours),
             "Caller is not a relayer and relayers are not inactive"
         );
 

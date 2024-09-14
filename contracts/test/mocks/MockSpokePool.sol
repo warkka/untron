@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
-import "../../src/interfaces/external/V3SpokePoolInterface.sol";
+import "../../src/interfaces/core/external/V3SpokePoolInterface.sol";
 
 contract MockSpokePool is V3SpokePoolInterface {
     event DepositV3Called(

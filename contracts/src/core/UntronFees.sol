@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "./interfaces/IUntronFees.sol";
+import "../interfaces/core/IUntronFees.sol";
 import "./UntronState.sol";
 import "./UntronTools.sol";
 

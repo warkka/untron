@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {ISP1Verifier} from "@sp1-contracts/ISP1Verifier.sol";
-import "./interfaces/IUntronZK.sol";
+import "../interfaces/core/IUntronZK.sol";
 import "./UntronState.sol";
 
 /// @title Module for ZK-related logic in Untron

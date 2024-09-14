@@ -3,9 +3,9 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "./interfaces/external/V3SpokePoolInterface.sol";
-import "./interfaces/external/IAggregationRouterV6.sol";
-import "./interfaces/IUntronTransfers.sol";
+import "../interfaces/core/external/V3SpokePoolInterface.sol";
+import "../interfaces/core/external/IAggregationRouterV6.sol";
+import "../interfaces/core/IUntronTransfers.sol";
 import "./UntronState.sol";
 import "./UntronTools.sol";
 

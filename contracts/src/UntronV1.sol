@@ -6,14 +6,18 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "./core/UntronCore.sol";
 import "./v1/RLPaymaster.sol";
+import "./interfaces/IUntronV1.sol";
 
-contract UntronV1 is Initializable, UntronCore, UUPSUpgradeable, RLPaymaster {
+contract UntronV1 is Initializable, UntronCore, UUPSUpgradeable, RLPaymaster, IUntronV1 {
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
     function initialize(
+        bytes32 _blockId,
+        bytes32 _stateHash,
+        uint256 _maxOrderSize,
         address _spokePool,
         address _usdt,
         address _swapper,
@@ -25,8 +29,10 @@ contract UntronV1 is Initializable, UntronCore, UUPSUpgradeable, RLPaymaster {
         uint256 _per
     ) public initializer {
         __UUPSUpgradeable_init();
-        __UntronCore_init(_spokePool, _usdt, _swapper, _relayerFee, _feePoint, _verifier, _vkey);
-        _changeRate(_rate, _per);
+        __UntronCore_init(
+            _blockId, _stateHash, _maxOrderSize, _spokePool, _usdt, _swapper, _relayerFee, _feePoint, _verifier, _vkey
+        );
+        _changeRateLimit(_rate, _per);
     }
 
     /// @notice Access Control role for unlimited order creation.
@@ -43,7 +49,7 @@ contract UntronV1 is Initializable, UntronCore, UUPSUpgradeable, RLPaymaster {
     {
         if (hasRole(UNLIMITED_CREATOR_ROLE, msg.sender)) {
             result = true;
-        } else if (_hasDelayPassed(_selector(), msg.sender, per, rate)) {
+        } else if (_hasDelayPassed(_selector(), msg.sender, rate, per)) {
             if (!isFunded[msg.sender]) {
                 _logCall(msg.sender, _selector());
             } else {

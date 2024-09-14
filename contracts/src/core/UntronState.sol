@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import "./interfaces/IUntronState.sol";
+import "../interfaces/core/IUntronState.sol";
 
 /// @title Module for storing Untron's variables
 /// @author Ultrasound Labs

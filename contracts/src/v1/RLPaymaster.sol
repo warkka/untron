@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
-import "@matterlabs/zksync-contracts/contracts/system-contracts/interfaces/IPaymaster.sol";
+import {Transaction} from "@matterlabs/zksync-contracts/contracts/system-contracts/interfaces/IPaymaster.sol";
+import "../interfaces/v1/IRLPaymaster.sol";
 import "./RateLimiting.sol";
 
 /// @title Rate limited paymaster for ZKsync Era
 /// @author Ultrasound Labs
 /// @notice This paymaster allows to register users and limit their allowed fundings per time period.
-contract RLPaymaster is IPaymaster, RateLimiting {
+contract RLPaymaster is RateLimiting, IRLPaymaster {
     mapping(address => bool) internal isFunded;
 
     function validateAndPayForPaymasterTransaction(bytes32, bytes32, Transaction calldata _transaction)
