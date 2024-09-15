@@ -36,6 +36,7 @@ contract RLPaymaster is RateLimiting, IRLPaymaster {
                 // for initiator of the tx
                 from,
                 // at paymaster's rate
+                // TODO: Check if this is correct
                 rate - 1,
                 // at paymaster's timeframe
                 per
