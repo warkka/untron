@@ -5,56 +5,67 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import "./interfaces/IUntronCore.sol";
+import "../interfaces/core/IUntronCore.sol";
 import "./UntronTransfers.sol";
 import "./UntronTools.sol";
 import "./UntronFees.sol";
 import "./UntronZK.sol";
 
-/// @title Main smart contract for Untron
+/// @title Core logic for Untron protocol
 /// @author Ultrasound Labs
-/// @notice This contract is the main entry point for implementation of the Untron protocol.
+/// @notice This contract contains the main logic of the Untron protocol.
 ///         It's designed to be fully upgradeable and modular, with each module being a separate contract.
-contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUntronCore, UUPSUpgradeable {
-    /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
-        _disableInitializers();
-    }
-
-    /// @notice Initializes the contract with the provided parameters.
+abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUntronCore {
+    /// @notice Initializes the core with the provided parameters.
+    /// @param _blockId The ID of the latest ZK proven block of Tron blockchain.
+    /// @param _stateHash The state hash of the latest ZK proven block of Tron blockchain.
+    /// @param _maxOrderSize The maximum size of the order in USDT L2.
     /// @param _spokePool The address of the Across bridge's SpokePool contract.
     /// @param _usdt The address of the USDT token.
     /// @param _swapper The address of the contract implementing swap logic.
+    /// @param _relayerFee The fee charged by the relayer, in percents.
+    /// @param _feePoint The basic fee point used to calculate the fee per transfer.
+    /// @param _verifier The address of the ZK proof verifier.
+    /// @param _vkey The vkey of the ZK program.
     /// @dev This function grants the DEFAULT_ADMIN_ROLE and UPGRADER_ROLE to the msg.sender.
     ///      Upgrader role allows to upgrade the contract and dynamic values (see UntronState)
-    function initialize(address _spokePool, address _usdt, address _swapper) public initializer {
+    function __UntronCore_init(
+        bytes32 _blockId,
+        bytes32 _stateHash,
+        uint256 _maxOrderSize,
+        address _spokePool,
+        address _usdt,
+        address _swapper,
+        uint256 _relayerFee,
+        uint256 _feePoint,
+        address _verifier,
+        bytes32 _vkey
+    ) public onlyInitializing {
         // initialize Access Control
         __AccessControl_init();
-        // initialize UUPS
-        __UUPSUpgradeable_init();
-
-        // initialize UntronState
-        __UntronState_init();
 
         // initialize UntronTransfers
         __UntronTransfers_init(_spokePool, _usdt, _swapper);
 
         // initialize UntronFees
-        __UntronFees_init(100, 10000); // 0.01% relayer fee, 0.01 USDT fee point
+        __UntronFees_init(_relayerFee, _feePoint);
 
         // initialize UntronZK
-        __UntronZK_init();
+        __UntronZK_init(_verifier, _vkey);
 
         // grant all necessary roles to msg.sender
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(UPGRADER_ROLE, msg.sender);
-        _grantRole(UNLIMITED_CREATOR_ROLE, msg.sender);
+
+        blockId = _blockId;
+        stateHash = _stateHash;
+        maxOrderSize = _maxOrderSize;
     }
 
     // UntronCore variables
     bytes32 public blockId;
     bytes32 public actionChainTip;
-    bytes32 public latestPerformedAction;
+    bytes32 public latestExecutedAction;
     bytes32 public stateHash;
     uint256 public maxOrderSize;
 
@@ -62,13 +73,13 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     function setCoreVariables(
         bytes32 _blockId,
         bytes32 _actionChainTip,
-        bytes32 _latestPerformedAction,
+        bytes32 _latestExecutedAction,
         bytes32 _stateHash,
         uint256 _maxOrderSize
     ) external onlyRole(UPGRADER_ROLE) {
         blockId = _blockId;
         actionChainTip = _actionChainTip;
-        latestPerformedAction = _latestPerformedAction;
+        latestExecutedAction = _latestExecutedAction;
         stateHash = _stateHash;
         maxOrderSize = _maxOrderSize;
     }
@@ -98,7 +109,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         return _orders[orderId];
     }
 
-    /// @notice Updates the action chain and returns the new tip.
+    /// @notice Updates the action chain and returns the new tip of the chain.
     /// @param receiver The address of the receiver.
     /// @param minDeposit The minimum deposit amount.
     /// @return _actionChainTip The new action chain tip.
@@ -110,7 +121,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         // ABI: (bytes32, uint256, address, uint256)
         uint256 tronTimestamp = unixToTron(block.timestamp);
         _actionChainTip = sha256(abi.encode(actionChainTip, tronTimestamp, receiver, minDeposit));
-        // latestOrder stores the latest order ID, that is, the tip of the order chain.
+        // actionChainTip stores the latest action (aka order id), that is, the tip of the action chain.
         actionChainTip = _actionChainTip;
 
         emit ActionChainUpdated(_actionChainTip, tronTimestamp, receiver, minDeposit);
@@ -128,7 +139,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     ///                 They'll be used in the fulfill or closeOrders functions to send respective
     ///                 USDT L2 to the order creator or convert them into whatever the order creator wants to receive
     ///                 for their USDT Tron.
-    /// @dev This function must only be called in the createOrder and createOrderUnlimited functions.
+    /// @dev This function must only be called in the createOrder function.
     function _createOrder(
         address creator,
         address provider,
@@ -153,7 +164,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         _providers[provider].liquidity -= amount;
 
         // get the previous action
-        bytes32 prevAction = latestPerformedAction;
+        bytes32 prevAction = latestExecutedAction;
         // create the order ID and update the action chain.
         // order ID is the tip of the action chain when the order was created.
         bytes32 orderId = updateActionChain(receiver, providerMinDeposit);
@@ -178,40 +189,28 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         emit OrderCreated(orderId, timestamp, creator, provider, receiver, size, rate, providerMinDeposit);
     }
 
-    /// @inheritdoc IUntronCore
-    function createOrder(address provider, address receiver, uint256 size, uint256 rate, Transfer calldata transfer)
-        external
-        ratePer(maxSponsorships, per, true)
-    {
-        // proceed with order creation (rate limiting is done in the modifier)
-        _createOrder(msg.sender, provider, receiver, size, rate, transfer);
-    }
-
-    /// @notice Access Control role for unlimited order creation.
-    /// @dev This role will be delegated to Untron team for integrations with projects not on ZKsync Era
-    ///      so they could create orders on behalf of the protocol without creating accounts on Era.
-    ///      We expect this design to be temporary and to be replaced with a more flexible and secure
-    ///      design in the future.
-    bytes32 public constant UNLIMITED_CREATOR_ROLE = keccak256("UNLIMITED_CREATOR_ROLE");
-
-    /// @notice Unlimited order creation function
+    /// @notice Checks if the order can be created.
     /// @param provider The address of the liquidity provider owning the Tron receiver address.
     /// @param receiver The address of the Tron receiver address
     ///                that's used to perform a USDT transfer on Tron.
     /// @param size The maximum size of the order in USDT L2.
     /// @param rate The "USDT L2 per 1 USDT Tron" rate of the order.
     /// @param transfer The transfer details.
-    ///                 They'll be used in the fulfill or closeOrders functions to send respective
-    ///                 USDT L2 to the order creator or convert them into to whatever the order creator wants to receive
-    ///                 for their USDT Tron.
-    function createOrderUnlimited(
-        address provider,
-        address receiver,
-        uint256 size,
-        uint256 rate,
-        Transfer calldata transfer
-    ) external onlyRole(UNLIMITED_CREATOR_ROLE) {
-        // proceed with order creation (no rate limiting because the initiator is trusted)
+    /// @return True if the order can be created, false otherwise.
+    /// @dev In Untron V1, this function implements rate limiting using Accounts library.
+    ///      In the future, we plan to move Untron to a B2B model where each project will create
+    ///      orders for their business logic. This abstraction allows to conveniently move from
+    ///      rate limiting without changing the codebase.
+    function _canCreateOrder(address provider, address receiver, uint256 size, uint256 rate, Transfer memory transfer)
+        internal
+        virtual
+        returns (bool);
+
+    /// @inheritdoc IUntronCore
+    function createOrder(address provider, address receiver, uint256 size, uint256 rate, Transfer calldata transfer)
+        external
+    {
+        require(_canCreateOrder(provider, receiver, size, rate, transfer), "Cannot create order");
         _createOrder(msg.sender, provider, receiver, size, rate, transfer);
     }
 
@@ -363,13 +362,13 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
     }
 
     /// @notice The timestamp of the last relayer activity.
-    /// @dev Used to make closing orders permissionless in case all relayers are down for more than 3 hours.
+    /// @dev Used to make closing orders permissionless in case all relayers are down for more than 12 hours.
     uint256 public lastRelayerActivity;
 
     /// @notice The role for the relayers.
     /// @dev Relayer is a role that is responsible for closing the orders.
     ///      They generate and publish ZK proofs for Tron blockchain and its contents, in exchange for a fee (in percents; see relayerFee in UntronState).
-    ///      If all relayers are down for more than 3 hours, relaying becomes permissionless (see lastRelayerActivity).
+    ///      If all relayers are down for more than 12 hours, relaying becomes permissionless (see lastRelayerActivity).
     bytes32 public constant RELAYER_ROLE = keccak256("RELAYER_ROLE");
 
     /// @notice Closes the orders and sends the funds to the providers or order creators, if not fulfilled.
@@ -379,7 +378,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         bool isRelayer = hasRole(RELAYER_ROLE, msg.sender);
         // Check if the sender has the relayer role or if all relayers are inactive
         require(
-            isRelayer || (block.timestamp - lastRelayerActivity > 3 hours),
+            isRelayer || (block.timestamp - lastRelayerActivity > 12 hours),
             "Caller is not a relayer and relayers are not inactive"
         );
 
@@ -401,14 +400,15 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
             bytes32 newBlockId,
             // new timestamp is the timestamp of the new latest (zk proven) block of Tron blockchain
             uint256 newTimestamp,
-            // "previous performed action" is the latest action that was ZK proven last time
-            bytes32 prevPerformedAction,
-            // "new performed action" is the latest action from the action chain that is ZK proven now.
-            // it's not necessarily the latest action chain, because the relayer might have
-            // ZK proven some old actions when the new ones were created.
-            // however, the new performed action must have been the action chain tip at some point.
-            bytes32 newPerformedAction,
-            // old state hash is the state print from the previous run of the ZK program.
+            // "previous executed action" is the latest action that was executed in the previous run 
+            // of the ZK program. (latestExecutedAction)
+            bytes32 prevExecutedAction,
+            // "new executed action" is the latest action from the action chain that was executed in the current run
+            // of the ZK program. it's not necessarily the latest action chain (action chain tip)
+            // because the relayer might have executed some older actions that do not include the latest ones.
+            // However, the new executed action must have been the action chain tip at some point.
+            bytes32 newExecutedAction,
+            // old state hash is the state print from the previous run of the ZK program. (stateHash)
             bytes32 oldStateHash,
             // new state hash is the state print from the new run of the ZK program.
             bytes32 newStateHash,
@@ -418,16 +418,16 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
 
         // check that the old block ID is the latest block ID that was ZK proven (blockId)
         require(oldBlockId == blockId, "Public input block id is not the latest ZK proven block id");
-        // check that the old action chain is the latest ZK proven action
+        // check that the latest (onchain) executed action is the previous executed action
         require(
-            prevPerformedAction == latestPerformedAction,
-            "Public input previous performed action is not the latest ZK proven action"
+            prevExecutedAction == latestExecutedAction,
+            "Public input previous executed action is not the latest ZK proven action"
         );
-        // require that the timestamp of the latest closed order is greater than or equal
+        // require that the timestamp of the new executed order is greater than or equal
         // to the timestamp of the new latest (zk proven) block of Tron blockchain.
         // this is needed to prevent the relayer from censoring orders until they expire.
         require(
-            _orders[newPerformedAction].timestamp >= newTimestamp,
+            _orders[newExecutedAction].timestamp >= newTimestamp,
             "Latest action is required to happen after the timestamp of the latest ZK proven Tron block"
         );
         // check that the old state hash is equal to the current state hash
@@ -436,7 +436,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
 
         // update the block ID, latest closed order and state hash
         blockId = newBlockId;
-        latestPerformedAction = newPerformedAction;
+        latestExecutedAction = newExecutedAction;
         stateHash = newStateHash;
 
         // this variable is used to calculate the total fee that the relayer will receive
@@ -473,7 +473,7 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         internalTransfer(msg.sender, totalFee);
 
         // emit the RelayUpdated event
-        emit RelayUpdated(msg.sender, blockId, latestPerformedAction, stateHash);
+        emit RelayUpdated(msg.sender, blockId, latestExecutedAction, stateHash);
     }
 
     /// @notice Sets the liquidity provider details.
@@ -539,9 +539,4 @@ contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUn
         // Emit ProviderUpdated event
         emit ProviderUpdated(msg.sender, liquidity, rate, minOrderSize, minDeposit);
     }
-
-    /// @notice Authorizes the upgrade of the contract.
-    /// @param newImplementation The address of the new implementation.
-    /// @dev This is a UUPS-related function.
-    function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {}
 }

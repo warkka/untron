@@ -1,8 +1,9 @@
 [zksync]
 rpc = "https://mainnet.era.zksync.io"
 private_key = "0xb00ba"
-fulfiller = false
 untron_contract_address = "0x0000000000000000000000000000000000000000"
+run_fulfiller = false
+fulfillment_buffer = 1
 
 [tron]
 rpc = "https://api.trongrid.io/jsonrpc"

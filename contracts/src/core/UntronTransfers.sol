@@ -3,9 +3,9 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "./interfaces/external/V3SpokePoolInterface.sol";
-import "./interfaces/external/IAggregationRouterV6.sol";
-import "./interfaces/IUntronTransfers.sol";
+import "../interfaces/core/external/V3SpokePoolInterface.sol";
+import "../interfaces/core/external/IAggregationRouterV6.sol";
+import "../interfaces/core/IUntronTransfers.sol";
 import "./UntronState.sol";
 import "./UntronTools.sol";
 
@@ -24,13 +24,7 @@ abstract contract UntronTransfers is IUntronTransfers, UntronTools, Initializabl
     /// @param _swapper The address of the contract implementing swap logic.
     ///                  In our case, it's 1inch V6 aggregation router.
     function __UntronTransfers_init(address _spokePool, address _usdt, address _swapper) internal onlyInitializing {
-        // initialize the state
-        __UntronState_init();
-
-        // set the parameters (see UntronState)
-        spokePool = _spokePool;
-        usdt = _usdt;
-        swapper = _swapper;
+        _setTransfersVariables(_usdt, _spokePool, _swapper);
     }
 
     // UntronTransfers variables
@@ -38,15 +32,19 @@ abstract contract UntronTransfers is IUntronTransfers, UntronTools, Initializabl
     address public spokePool;
     address public swapper;
 
+    function _setTransfersVariables(address _usdt, address _spokePool, address _swapper) internal {
+        usdt = _usdt;
+        spokePool = _spokePool;
+        swapper = _swapper;
+    }
+
     /// @inheritdoc IUntronTransfers
     function setTransfersVariables(address _usdt, address _spokePool, address _swapper)
         external
         override
         onlyRole(UPGRADER_ROLE)
     {
-        usdt = _usdt;
-        spokePool = _spokePool;
-        swapper = _swapper;
+        _setTransfersVariables(_usdt, _spokePool, _swapper);
     }
 
     /// @notice Swaps USDT to the desired token specified in the transfer.

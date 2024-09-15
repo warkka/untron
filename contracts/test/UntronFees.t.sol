@@ -2,8 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../src/UntronCore.sol";
-import "../src/UntronState.sol";
+import "../src/UntronV1.sol";
 import "./mocks/MockSpokePool.sol";
 import "./mocks/MockAggregationRouter.sol";
 import "@sp1-contracts/SP1MockVerifier.sol";
@@ -19,8 +18,8 @@ contract MockUSDT is ERC20 {
 }
 
 contract UntronFeesTest is Test {
-    UntronFees untronFeesImplementation;
-    UntronFees untronFees;
+    UntronV1 untronFeesImplementation;
+    UntronV1 untronFees;
     MockSpokePool spokePool;
     MockAggregationRouter aggregationRouter;
     SP1MockVerifier sp1Verifier;
@@ -41,15 +40,27 @@ contract UntronFeesTest is Test {
         usdt = new MockUSDT();
 
         // Use UntronCore since UntronFees is abstract
-        untronFeesImplementation = new UntronCore();
+        untronFeesImplementation = new UntronV1();
         // Prepare the initialization data
         bytes memory initData = abi.encodeWithSelector(
-            UntronCore.initialize.selector, address(spokePool), address(usdt), address(aggregationRouter)
+            UntronV1.initialize.selector,
+            bytes32(0), // blockId
+            bytes32(0), // stateHash
+            1000e6, // maxOrderSize
+            address(spokePool),
+            address(usdt),
+            address(aggregationRouter),
+            100, // relayerFee
+            10000, // feePoint
+            address(sp1Verifier),
+            bytes32(0), // vkey
+            10, // rate
+            24 hours // per
         );
 
         // Deploy the proxy, pointing to the implementation and passing the init data
         ERC1967Proxy proxy = new ERC1967Proxy(address(untronFeesImplementation), initData);
-        untronFees = UntronFees(address(proxy));
+        untronFees = UntronV1(address(proxy));
         untronFees.grantRole(untronFees.UPGRADER_ROLE(), admin);
 
         vm.stopPrank();

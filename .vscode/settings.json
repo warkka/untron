@@ -1,7 +1,7 @@
 {
     "rust-analyzer.linkedProjects": [
         // "relayer/Cargo.toml",
-        "program/Cargo.toml",
+        // "program/Cargo.toml",
         "fulfiller/Cargo.toml"
     ],
     "rust-analyzer.check.overrideCommand": [

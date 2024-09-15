@@ -96,12 +96,12 @@ interface IUntronCore is IUntronTransfers, IUntronFees, IUntronZK, IUntronState 
     /// @notice Updates the UntronCore-related variables
     /// @param _blockId The new block ID of the latest zk proven Tron block
     /// @param _actionChainTip The new action chain tip
-    /// @param _latestPerformedAction The new latest performed action from the action chain
+    /// @param _latestExecutedAction The new latest performed action from the action chain
     /// @param _stateHash The new hash of the latest state of Untron ZK program
     function setCoreVariables(
         bytes32 _blockId,
         bytes32 _actionChainTip,
-        bytes32 _latestPerformedAction,
+        bytes32 _latestExecutedAction,
         bytes32 _stateHash,
         uint256 _maxOrderSize
     ) external;
