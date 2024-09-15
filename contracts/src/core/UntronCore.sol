@@ -17,6 +17,9 @@ import "./UntronZK.sol";
 ///         It's designed to be fully upgradeable and modular, with each module being a separate contract.
 abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUntronCore {
     /// @notice Initializes the core with the provided parameters.
+    /// @param _blockId The ID of the latest ZK proven block of Tron blockchain.
+    /// @param _stateHash The state hash of the latest ZK proven block of Tron blockchain.
+    /// @param _maxOrderSize The maximum size of the order in USDT L2.
     /// @param _spokePool The address of the Across bridge's SpokePool contract.
     /// @param _usdt The address of the USDT token.
     /// @param _swapper The address of the contract implementing swap logic.
@@ -62,7 +65,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
     // UntronCore variables
     bytes32 public blockId;
     bytes32 public actionChainTip;
-    bytes32 public latestPerformedAction;
+    bytes32 public latestExecutedAction;
     bytes32 public stateHash;
     uint256 public maxOrderSize;
 
@@ -70,13 +73,13 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
     function setCoreVariables(
         bytes32 _blockId,
         bytes32 _actionChainTip,
-        bytes32 _latestPerformedAction,
+        bytes32 _latestExecutedAction,
         bytes32 _stateHash,
         uint256 _maxOrderSize
     ) external onlyRole(UPGRADER_ROLE) {
         blockId = _blockId;
         actionChainTip = _actionChainTip;
-        latestPerformedAction = _latestPerformedAction;
+        latestExecutedAction = _latestExecutedAction;
         stateHash = _stateHash;
         maxOrderSize = _maxOrderSize;
     }
@@ -106,7 +109,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         return _orders[orderId];
     }
 
-    /// @notice Updates the action chain and returns the new tip.
+    /// @notice Updates the action chain and returns the new tip of the chain.
     /// @param receiver The address of the receiver.
     /// @param minDeposit The minimum deposit amount.
     /// @return _actionChainTip The new action chain tip.
@@ -118,7 +121,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         // ABI: (bytes32, uint256, address, uint256)
         uint256 tronTimestamp = unixToTron(block.timestamp);
         _actionChainTip = sha256(abi.encode(actionChainTip, tronTimestamp, receiver, minDeposit));
-        // latestOrder stores the latest order ID, that is, the tip of the order chain.
+        // actionChainTip stores the latest action (aka order id), that is, the tip of the action chain.
         actionChainTip = _actionChainTip;
 
         emit ActionChainUpdated(_actionChainTip, tronTimestamp, receiver, minDeposit);
@@ -161,7 +164,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         _providers[provider].liquidity -= amount;
 
         // get the previous action
-        bytes32 prevAction = latestPerformedAction;
+        bytes32 prevAction = latestExecutedAction;
         // create the order ID and update the action chain.
         // order ID is the tip of the action chain when the order was created.
         bytes32 orderId = updateActionChain(receiver, providerMinDeposit);
@@ -359,7 +362,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
     }
 
     /// @notice The timestamp of the last relayer activity.
-    /// @dev Used to make closing orders permissionless in case all relayers are down for more than 3 hours.
+    /// @dev Used to make closing orders permissionless in case all relayers are down for more than 12 hours.
     uint256 public lastRelayerActivity;
 
     /// @notice The role for the relayers.
@@ -397,14 +400,15 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
             bytes32 newBlockId,
             // new timestamp is the timestamp of the new latest (zk proven) block of Tron blockchain
             uint256 newTimestamp,
-            // "previous performed action" is the latest action that was ZK proven last time
-            bytes32 prevPerformedAction,
-            // "new performed action" is the latest action from the action chain that is ZK proven now.
-            // it's not necessarily the latest action chain, because the relayer might have
-            // ZK proven some old actions when the new ones were created.
-            // however, the new performed action must have been the action chain tip at some point.
-            bytes32 newPerformedAction,
-            // old state hash is the state print from the previous run of the ZK program.
+            // "previous executed action" is the latest action that was executed in the previous run 
+            // of the ZK program. (latestExecutedAction)
+            bytes32 prevExecutedAction,
+            // "new executed action" is the latest action from the action chain that was executed in the current run
+            // of the ZK program. it's not necessarily the latest action chain (action chain tip)
+            // because the relayer might have executed some older actions that do not include the latest ones.
+            // However, the new executed action must have been the action chain tip at some point.
+            bytes32 newExecutedAction,
+            // old state hash is the state print from the previous run of the ZK program. (stateHash)
             bytes32 oldStateHash,
             // new state hash is the state print from the new run of the ZK program.
             bytes32 newStateHash,
@@ -414,16 +418,16 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
 
         // check that the old block ID is the latest block ID that was ZK proven (blockId)
         require(oldBlockId == blockId, "Public input block id is not the latest ZK proven block id");
-        // check that the old action chain is the latest ZK proven action
+        // check that the latest (onchain) executed action is the previous executed action
         require(
-            prevPerformedAction == latestPerformedAction,
-            "Public input previous performed action is not the latest ZK proven action"
+            prevExecutedAction == latestExecutedAction,
+            "Public input previous executed action is not the latest ZK proven action"
         );
-        // require that the timestamp of the latest closed order is greater than or equal
+        // require that the timestamp of the new executed order is greater than or equal
         // to the timestamp of the new latest (zk proven) block of Tron blockchain.
         // this is needed to prevent the relayer from censoring orders until they expire.
         require(
-            _orders[newPerformedAction].timestamp >= newTimestamp,
+            _orders[newExecutedAction].timestamp >= newTimestamp,
             "Latest action is required to happen after the timestamp of the latest ZK proven Tron block"
         );
         // check that the old state hash is equal to the current state hash
@@ -432,7 +436,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
 
         // update the block ID, latest closed order and state hash
         blockId = newBlockId;
-        latestPerformedAction = newPerformedAction;
+        latestExecutedAction = newExecutedAction;
         stateHash = newStateHash;
 
         // this variable is used to calculate the total fee that the relayer will receive
@@ -469,7 +473,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         internalTransfer(msg.sender, totalFee);
 
         // emit the RelayUpdated event
-        emit RelayUpdated(msg.sender, blockId, latestPerformedAction, stateHash);
+        emit RelayUpdated(msg.sender, blockId, latestExecutedAction, stateHash);
     }
 
     /// @notice Sets the liquidity provider details.
