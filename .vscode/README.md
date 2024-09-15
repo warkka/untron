@@ -1,1 +1,1 @@
-note: for some reason, initializing both /relayer and /fulfiller in the workspace runs into some kind of a race condition causing both to fail to compile. Thus, it's recommended to only initialize what you're working on.
+Note: for some reason, initializing both /relayer and /fulfiller in the workspace runs into some kind of a race condition causing both to fail to compile. Thus, it's recommended to only initialize what you're working on.

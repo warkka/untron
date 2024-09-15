@@ -18,6 +18,7 @@ pub struct Tron {
 pub struct ZkSync {
     pub rpc: String,
     pub private_key: String,
-    pub fulfiller: bool,
     pub untron_contract_address: String,
+    pub run_fulfiller: bool,
+    pub fulfillment_buffer: u64,
 }
