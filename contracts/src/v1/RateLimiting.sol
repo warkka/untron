@@ -95,7 +95,7 @@ contract RateLimiting is AccessControlUpgradeable, IRateLimiting {
         // if it did indeed happen with this delay OR there were less actions than could be indexed with this offset,
         // we return true (delay has passed). otherwise, we return false.
         return (journal[user].length < maxActions)
-            || journal[user][journal[user].length + 1 - maxActions] + delay <= block.timestamp;
+            || journal[user][journal[user].length - maxActions] + delay <= block.timestamp;
     }
 
     function _logCall(address user, bytes4 selector) internal {
