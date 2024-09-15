@@ -42,6 +42,7 @@ contract UntronV1 is Initializable, UntronCore, UUPSUpgradeable, RLPaymaster, IU
     ///      design in the future.
     bytes32 public constant UNLIMITED_CREATOR_ROLE = keccak256("UNLIMITED_CREATOR_ROLE");
 
+    /// @inheritdoc UntronCore
     function _canCreateOrder(address, address, uint256, uint256, Transfer memory)
         internal
         override
