@@ -3,7 +3,6 @@ pub mod protobuf;
 
 use std::collections::HashMap;
 
-use alloy_sol_types::{sol, SolType};
 use serde::{Deserialize, Serialize};
 
 // how long the program will look for order's receiver address in the transactions of a block
@@ -14,6 +13,9 @@ pub const BLOCK_TIME: u64 = 3000; // milliseconds
 
 // proof: https://tronscan.org/#/block/64992129 and https://tronscan.org/#/block/64992130 timestamps differ by 9 secs.
 // 64992129 - (64992129 // 7198 * 7198) = 1387
+// it's worth noting, however, that this program should not be used for very old blocks,
+// because they change consensus randomly and notify about this nowhere.
+// this number is guaranteed to work for the last few months
 pub const MAINTENANCE_PERIOD_BLOCK_OFFSET: u32 = 1387;
 
 // how often maintenance period happens.
@@ -21,9 +23,27 @@ pub const MAINTENANCE_PERIOD_BLOCK_OFFSET: u32 = 1387;
 pub const MAINTENANCE_PERIOD_INTERVAL: u32 = 7198;
 
 // Action is the format of the action data that's needed for the program, chained with the previous action
-pub type Action = sol! {
-    tuple(bytes32,uint64,address,uint64)
-};
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Action {
+    pub prev: [u8; 32],
+    pub timestamp: u64,
+    pub address: [u8; 20],
+    pub min_deposit: u64,
+}
+// sol! can't work with Serialize and Deserialize
+impl Action {
+    fn abi_encode(&self) -> Vec<u8> {
+        let mut encoded = Vec::new();
+        encoded.extend_from_slice(&self.prev);
+        encoded.extend_from_slice(&[0u8; 24]);
+        encoded.extend_from_slice(&self.timestamp.to_be_bytes());
+        encoded.extend_from_slice(&[0u8; 12]);
+        encoded.extend_from_slice(&self.address);
+        encoded.extend_from_slice(&[0u8; 24]);
+        encoded.extend_from_slice(&self.min_deposit.to_be_bytes());
+        encoded
+    }
+}
 
 // OrderState is the state of an order in the Untron program
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -52,6 +72,8 @@ pub struct State {
     pub srs: [[u8; 20]; 27],
     // votes for SRs
     pub votes: HashMap<[u8; 20], u64>,
+    // all actions that are not yet executed (because their mapped Tron block was not executed yet)
+    pub pending_actions: Vec<(Action, [u8; 32])>,
     // all currently active orders in the Untron protocol
     pub orders: HashMap<[u8; 32], OrderState>,
     // chained hash of all actions in the Untron protocol
@@ -91,7 +113,7 @@ pub struct RawBlock {
 // and the smart contract will only receive the results of the execution.
 pub struct Execution {
     // new actions from the smart contract
-    pub actions: Vec<Order>,
+    pub actions: Vec<Action>,
     // new blocks from the Tron blockchain
     pub blocks: Vec<RawBlock>,
 }
@@ -109,28 +131,12 @@ pub fn block_id_to_number(block_id: [u8; 32]) -> u32 {
 // it takes the current state and an execution
 // and returns the new state and the closed orders, then passed to the smart contract.
 pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], u64)> {
-    // iterate over all new order actions to form the new action chain
+    // iterate over all new order actions to form the new action chain and add them to the pending actions
     for action in execution.actions {
-        // encode the action into the chained ABI format
-        let encoded_action = Action::abi_encode(&(
-            state.action_chain,
-            action.timestamp,
-            action.address,
-            action.min_deposit,
-        ));
         // hash the chained order and insert it into the state
-        state.action_chain = crypto::hash(&encoded_action);
+        state.action_chain = crypto::hash(&action.abi_encode());
 
-        // Convert Order into OrderState with inflow = 0
-        state.orders.insert(
-            state.action_chain,
-            OrderState {
-                address: action.address,
-                timestamp: action.timestamp,
-                inflow: 0,
-                min_deposit: action.min_deposit,
-            },
-        );
+        state.pending_actions.push((action, state.action_chain));
     }
 
     // this vector will store the closed orders
@@ -138,11 +144,11 @@ pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], u64)> {
     // this hashmap will store the receiver addresses of the active orders
     // and their order ids
     let mut active_addresses: HashMap<[u8; 20], [u8; 32]> = HashMap::new();
-    // count of the blocks to process (needed to skip the contents of the last 19 blocks to ensure Tron's finality)
+    // count of the blocks to process (needed to skip the contents of the last 19 blocks to ensure finality of the chain)
     let block_count = execution.blocks.len();
 
-    // for simplicity of relayer implementation, we need at least 100 blocks to be processed
-    assert!(block_count as u64 > ORDER_TTL);
+    // for simplicity of relayer implementation, we need at least 119 blocks to be processed
+    assert!(block_count as u64 > ORDER_TTL + 19);
 
     // iterate over all new blocks
     let mut latest_block_id = state.latest_block_id;
@@ -191,32 +197,42 @@ pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], u64)> {
 
         // content checks (pka walkthrough)
 
-        // iterate over all active orders
-        let orders_copy = state.orders.clone();
-        for (order_id, order) in orders_copy {
-            if block_header.timestamp > order.timestamp + ORDER_TTL * BLOCK_TIME {
-                // if the order is expired, we close it
-                state.orders.remove(&order_id);
-                closed_orders.push((order_id, order.inflow));
-                active_addresses.remove(&order.address);
-            } else if block_header.timestamp < order.timestamp {
-                // if the order is not yet live at this block, we don't include it to the active addresses
-                continue;
-            } else {
-                // if the order is live, we...
-                match active_addresses.entry(order.address) {
-                    // if the address from the order is already active, we close the order
-                    // (double order to the same address means it was stopped by the order creator)
-                    std::collections::hash_map::Entry::Occupied(_) => {
-                        state.orders.remove(&order_id);
-                        closed_orders.push((order_id, order.inflow));
-                        active_addresses.remove(&order.address);
+        loop {
+            match state.pending_actions.first().cloned() {
+                Some((action, action_id)) => {
+                    if action.timestamp > block_header.timestamp {
+                        break;
                     }
-                    // if the order is not active, we activate it
-                    std::collections::hash_map::Entry::Vacant(entry) => {
-                        entry.insert(order_id);
+
+                    // remove the action from the pending actions
+                    state.pending_actions.remove(0);
+
+                    match active_addresses.remove(&action.address) {
+                        Some(action_id) => {
+                            // If the address is already active, close the existing order
+                            // Add the closed order to the list with its action_id and inflow amount
+                            closed_orders
+                                .push((action_id, state.orders.get(&action_id).unwrap().inflow));
+                            // Remove the closed order from the state
+                            state.orders.remove(&action_id);
+                        }
+                        None => {
+                            // If the address is not active, create a new order
+                            state.orders.insert(
+                                action_id,
+                                OrderState {
+                                    address: action.address,
+                                    timestamp: action.timestamp,
+                                    inflow: 0,
+                                    min_deposit: action.min_deposit,
+                                },
+                            );
+                            // Mark the address as active with the new action_id
+                            active_addresses.insert(action.address, action_id);
+                        }
                     }
                 }
+                None => panic!("the proof must contain at least one pending action at the end"),
             }
         }
 
