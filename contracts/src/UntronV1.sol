@@ -43,14 +43,22 @@ contract UntronV1 is Initializable, UntronCore, UUPSUpgradeable, RLPaymaster, IU
     bytes32 public constant UNLIMITED_CREATOR_ROLE = keccak256("UNLIMITED_CREATOR_ROLE");
 
     /// @inheritdoc UntronCore
-    function _canCreateOrder(address, address, uint256, uint256, Transfer memory)
+    function _canCreateOrder(address provider, address, uint256 size, uint256, Transfer memory)
         internal
         override
         returns (bool result)
     {
+        (uint256 amount,) = conversion(size, _providers[provider].rate, 0, false);
+
+        // if the amount is equal to provider's liquidity, then the order creator must have UNLIMITED_CREATOR_ROLE,
+        // because execution of reversed orders is trusted in Untron V1 implementation. We'll make it trustless
+        // and collateral-based in the next versions of Untron.
+        // otherwise, the order creator must either not exceed their rate limit or have the UNLIMITED_CREATOR_ROLE.
         if (hasRole(UNLIMITED_CREATOR_ROLE, msg.sender)) {
             result = true;
-        } else if (_hasDelayPassed(_selector(), msg.sender, rate, per)) {
+        } else if ((amount != _providers[provider].liquidity) || _hasDelayPassed(_selector(), msg.sender, rate, per)) {
+            // isFunded is a flag set in the paymaster. If the paymaster is used, the flag is set to true.
+            // This is so that we don't trigger _logCall twice, as it's also triggered in the paymaster.
             if (!isFunded[msg.sender]) {
                 _logCall(msg.sender, _selector());
             } else {

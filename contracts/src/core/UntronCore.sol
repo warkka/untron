@@ -87,7 +87,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
     }
 
     /// @notice Mapping to store provider details.
-    mapping(address => Provider) private _providers;
+    mapping(address => Provider) internal _providers;
     /// @notice Mapping to store whether a receiver is busy with an order.
     mapping(address => bytes32) private _isReceiverBusy;
     /// @notice Mapping to store the owner (provider) of a receiver.
