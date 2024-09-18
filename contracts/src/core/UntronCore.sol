@@ -95,18 +95,30 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
     /// @notice Mapping to store order details by order ID.
     mapping(bytes32 => Order) private _orders;
 
+    /// @notice Returns the provider details for a given address
+    /// @param provider The address of the provider
+    /// @return Provider struct containing the provider's details
     function providers(address provider) external view returns (Provider memory) {
         return _providers[provider];
     }
 
+    /// @notice Checks if a receiver is busy with an order
+    /// @param receiver The address of the receiver
+    /// @return bytes32 The order ID if the receiver is busy, otherwise 0
     function isReceiverBusy(address receiver) external view returns (bytes32) {
         return _isReceiverBusy[receiver];
     }
 
+    /// @notice Returns the owner (provider) of a receiver
+    /// @param receiver The address of the receiver
+    /// @return address The address of the owner (provider)
     function receiverOwners(address receiver) external view returns (address) {
         return _receiverOwners[receiver];
     }
 
+    /// @notice Returns the order details for a given order ID
+    /// @param orderId The ID of the order
+    /// @return Order struct containing the order details
     function orders(bytes32 orderId) external view returns (Order memory) {
         return _orders[orderId];
     }
@@ -258,6 +270,10 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         emit OrderStopped(orderId);
     }
 
+    /// @notice Calculates the amount and fee for a given order
+    /// @param order The Order struct containing order details
+    /// @return amount The amount of USDT L2 that the fulfiller will have to send
+    /// @return fee The fee for the fulfiller
     function _getAmountAndFee(Order memory order) internal view returns (uint256 amount, uint256 fee) {
         // calculate the fulfiller fee given the order details
         fee = calculateFee(order.transfer.doSwap, order.transfer.chainId);
@@ -265,6 +281,9 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         (amount,) = conversion(order.size, order.rate, fee, true);
     }
 
+    /// @notice Retrieves the active order for a given receiver
+    /// @param receiver The address of the receiver
+    /// @return Order struct containing the active order details
     function _getActiveOrderByReceiver(address receiver) internal view returns (Order memory) {
         // get the active order ID for the receiver
         bytes32 activeOrderId = _isReceiverBusy[receiver];
@@ -528,6 +547,9 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         emit ProviderUpdated(msg.sender, liquidity, rate, minOrderSize, minDeposit);
     }
 
+    /// @notice Frees the receiver by setting it as not busy and updating the action chain with closure action.
+    /// @param receiver The address of the receiver to be freed
+    /// @dev does not implement checks if the closure is legitimate; must be implemented by the caller function
     function _freeReceiver(address receiver) internal {
         _isReceiverBusy[receiver] = bytes32(0);
         updateActionChain(receiver, 0);
