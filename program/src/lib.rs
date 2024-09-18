@@ -120,7 +120,8 @@ pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], u64)> {
         ));
         // hash the chained order and insert it into the state
         state.action_chain = crypto::hash(&encoded_action);
-        // insert the order data into the state
+
+        // Convert Order into OrderState with inflow = 0
         state.orders.insert(
             state.action_chain,
             OrderState {
@@ -144,6 +145,7 @@ pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], u64)> {
     assert!(block_count as u64 > ORDER_TTL);
 
     // iterate over all new blocks
+    let mut latest_block_id = state.latest_block_id;
     for (i, block) in execution.blocks.into_iter().enumerate() {
         // consensus checks (pka zktron)
 
@@ -153,7 +155,7 @@ pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], u64)> {
         // deserialize raw_data into the BlockHeader struct with all data we need
         // it also validates raw_data by comparing latest_block_id with the prev one specified in the raw_data
         let block_header =
-            protobuf::parse_block_header(state.latest_block_id, &block.raw_data, raw_data_hash);
+            protobuf::parse_block_header(latest_block_id, &block.raw_data, raw_data_hash);
 
         // recover the proposer's public key from the raw_data hash and proposer signature
         let public_key = crypto::recover_public_key(&block.signature, raw_data_hash);
@@ -171,6 +173,12 @@ pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], u64)> {
         // add the proposer to the cycle
         state.cycle.push(sr);
 
+        // RATIONALE:
+        // we don't want to update latest_block_id in the state
+        // if we're checking the contents of the unfinalized blocks,
+        // but we still need to store the previous block id to check them
+        latest_block_id = block_header.new_block_id;
+
         // we do verify the latest 19 blocks but don't check their contents
         // so that all blocks that were checked are finalized (19 blocks built on top of them)
         if block_count - i <= 19 {
@@ -178,7 +186,7 @@ pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], u64)> {
         }
 
         // update the latest block id and timestamp
-        state.latest_block_id = block_header.new_block_id;
+        state.latest_block_id = latest_block_id;
         state.latest_timestamp = block_header.timestamp;
 
         // content checks (pka walkthrough)
