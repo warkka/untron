@@ -1,19 +1,21 @@
 # Untron Monorepo
 
-This repo contains all code for [Untron](http://untron.finance) project.
+This repo contains all code for Untron project.
 
 ![Untron Banner](/static/banner.png)
 
 ## What's Untron?
 
-Untron is a decentralized exchange powered by zero-knowledge proofs of Tron blockchain. With Untron, everyone can seamlessly swap between USDT on Tron and other crypto in the Ethereum ecosystem. Inspired by [ZKP2P](https://zkp2p.xyz), it allows anyone to provide liquidity for the bridge at their preferred rate, which makes Untron the cheapest and most trustless way to interact with Tron ecosystem. It's an implementation of ["P2P ZK Light Client Bridge between Tron and Ethereum L2s" (Hook, 2024)](https://ethresear.ch/t/p2p-zk-light-client-bridge-between-tron-and-ethereum-l2s/19931).
+Untron is a decentralized exchange powered by zero-knowledge proofs of Tron blockchain. It allows everyone to seamlessly use USDT Tron in the Ethereum ecosystem and vice versa. Thanks to its marketplace-based design, anyone can provide liquidity for the bridge at their preferred rate, which makes Untron the cheapest and most trustless way to interact with Tron ecosystem.
+
+The idea behind Untron is described in ["P2P ZK Light Client Bridge between Tron and Ethereum L2s" (Hook, 2024)](https://ethresear.ch/t/p2p-zk-light-client-bridge-between-tron-and-ethereum-l2s/19931).
 
 ## Repository Structure
 
-- [`contracts`](/contracts): all smart contracts for Untron Core (core logic) and Untron V1 (rate-limited production wrapper). Written in Solidity and deployed on ZKsync Era L2 blockchain.
+- [`contracts`](/contracts): all smart contracts for Untron Core (core logic) and Untron V1 (rate-limited production wrapper). Written in Solidity.
 - [`program`](/program): ZK program for Untron, implementing Tron consensus verification and transaction scanning. Written in Rust using [SP1](https://github.com/succinctlabs/sp1).
 - [`relayer`](/relayer): relayer for Untron, written in Rust. It generates ZK proofs of the program using the prover network and broadcasts them to the Core.
-- [`fulfiller`](/fulfiller): fulfiller for Untron, written in Rust. Acting quite similar to [relayers in Across](https://docs.across.to/concepts/intents-architecture-in-across), it scans the Tron blockchain for new swap deposits and sends the respective outputs to the swap initiator in advance, allowing for faster swaps before the ZK proof of the deposit is published to the smart contract.
+- [`fulfiller`](/fulfiller): fulfiller for Untron, written in Rust. It scans the Tron blockchain for new swap deposits and sends the respective outputs to the swap initiator in advance, allowing to execute swaps even before the ZK proof of the deposit is published.
 
 ## Architecture & Integrations
 
