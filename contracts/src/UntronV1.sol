@@ -56,7 +56,7 @@ contract UntronV1 is Initializable, UntronCore, UUPSUpgradeable, RLPaymaster, IU
         // otherwise, the order creator must either not exceed their rate limit or have the UNLIMITED_CREATOR_ROLE.
         if (hasRole(UNLIMITED_CREATOR_ROLE, msg.sender)) {
             result = true;
-        } else if ((amount != _providers[provider].liquidity) || _hasDelayPassed(_selector(), msg.sender, rate, per)) {
+        } else if ((amount != _providers[provider].liquidity) && _hasDelayPassed(_selector(), msg.sender, rate, per)) {
             // isFunded is a flag set in the paymaster. If the paymaster is used, the flag is set to true.
             // This is so that we don't trigger _logCall twice, as it's also triggered in the paymaster.
             if (!isFunded[msg.sender]) {
