@@ -400,7 +400,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
             bytes32 newBlockId,
             // new timestamp is the timestamp of the new latest (zk proven) block of Tron blockchain
             uint256 newTimestamp,
-            // "previous executed action" is the latest action that was executed in the previous run 
+            // "previous executed action" is the latest action that was executed in the previous run
             // of the ZK program. (latestExecutedAction)
             bytes32 prevExecutedAction,
             // "new executed action" is the latest action from the action chain that was executed in the current run
@@ -464,6 +464,18 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
 
             // perform the transfer
             smartTransfer(_orders[orderId].transfer, amount);
+
+            if (!_orders[orderId].isFulfilled) {
+                // if the order is not fulfilled, update the action chain to free the receiver address
+                updateActionChain(_orders[orderId].receiver, 0);
+            }
+
+            // TODO: there might be a conversion bug idk
+
+            // if not entire size is sent, send the remaining liquidity back to the provider
+            (uint256 remainingLiquidity,) =
+                conversion(_orders[orderId].size - minInflow, _orders[orderId].rate, 0, false);
+            _providers[_orders[orderId].provider].liquidity += remainingLiquidity;
 
             // emit the OrderClosed event
             emit OrderClosed(orderId, msg.sender);
