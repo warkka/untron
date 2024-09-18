@@ -115,6 +115,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
     /// @param receiver The address of the receiver.
     /// @param minDeposit The minimum deposit amount.
     /// @return _actionChainTip The new action chain tip.
+    /// @dev must only be used in _createOrder and _freeReceiver
     function updateActionChain(address receiver, uint256 minDeposit) internal returns (bytes32 _actionChainTip) {
         // action chain is a hash chain of the order-related, onchain-initiated actions.
         // Action consists of timestamp in Tron format, Tron receiver address, and minimum deposit amount.
@@ -162,9 +163,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
                 "Receiver is busy"
             );
             // if it's expired, stop it manually
-            updateActionChain(receiver, 0);
-            // and make the receiver not busy
-            _isReceiverBusy[receiver] = bytes32(0);
+            _freeReceiver(receiver);
         }
         require(_receiverOwners[receiver] == provider, "Receiver is not owned by provider");
         require(_providers[provider].liquidity >= amount, "Provider does not have enough liquidity");
@@ -246,9 +245,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         );
 
         // update the action chain with stop action
-        updateActionChain(_orders[orderId].receiver, 0);
-        // set the receiver as not busy because the order is stopped
-        _isReceiverBusy[_orders[orderId].receiver] = bytes32(0);
+        _freeReceiver(_orders[orderId].receiver);
 
         // return the liquidity back to the provider
         _providers[_orders[orderId].provider].liquidity += _orders[orderId].size;
@@ -317,7 +314,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
             smartTransfer(order.transfer, amount);
 
             // update action chain to free the receiver address
-            updateActionChain(_receivers[i], 0);
+            _freeReceiver(_receivers[i]);
 
             // update the order details
 
@@ -332,8 +329,6 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
             _orders[activeOrderId].transfer.doSwap = false;
             // set the fulfilled order as isFullfilled true
             _orders[activeOrderId].isFulfilled = true;
-            // make the receiver not busy anymore
-            delete _isReceiverBusy[_receivers[i]];
 
             // Emit OrderFulfilled event
             emit OrderFulfilled(activeOrderId, msg.sender);
@@ -445,7 +440,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
 
             if (!_orders[orderId].isFulfilled) {
                 // if the order is not fulfilled, update the action chain to free the receiver address
-                updateActionChain(_orders[orderId].receiver, 0);
+                _freeReceiver(_orders[orderId].receiver);
             }
 
             // TODO: there might be a conversion bug idk
@@ -509,7 +504,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
                     "One of the current receivers is busy"
                 );
                 // set the receiver as not busy
-                _isReceiverBusy[receivers[i]] = bytes32(0);
+                _freeReceiver(receivers[i]);
                 // set the receiver owner to zero address
                 // TODO: i don't recall if we even use _receiverOwners tbh
                 _receiverOwners[receivers[i]] = address(0);
@@ -533,6 +528,11 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         emit ProviderUpdated(msg.sender, liquidity, rate, minOrderSize, minDeposit);
     }
 
+    function _freeReceiver(address receiver) internal {
+        _isReceiverBusy[receiver] = bytes32(0);
+        updateActionChain(receiver, 0);
+    }
+
     /// @inheritdoc IUntronCore
     function freeReceivers(address[] calldata receivers) external {
         // iterate over the receivers
@@ -542,8 +542,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
                 _isReceiverBusy[receivers[i]] != bytes32(0)
                     && _orders[_isReceiverBusy[receivers[i]]].timestamp + ORDER_TTL < unixToTron(block.timestamp)
             ) {
-                _isReceiverBusy[receivers[i]] = bytes32(0);
-                updateActionChain(receivers[i], 0);
+                _freeReceiver(receivers[i]);
             }
         }
     }
