@@ -180,7 +180,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         require(_receiverOwners[receiver] == provider, "Receiver is not owned by provider");
         require(_providers[provider].liquidity >= amount, "Provider does not have enough liquidity");
         require(rate == _providers[provider].rate, "Rate does not match provider's rate");
-        require(providerMinDeposit <= size, "Min deposit is greater than size");
+        require(_providers[provider].minOrderSize <= size, "Order size is less than minimum");
         require(size <= maxOrderSize, "Size is greater than max order size");
 
         // subtract the amount from the provider's liquidity
@@ -509,6 +509,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
 
         // update the provider's rate
         _providers[msg.sender].rate = rate;
+        require(minDeposit <= minOrderSize, "Min deposit is greater than min order size");
         // update the provider's minimum order size
         _providers[msg.sender].minOrderSize = minOrderSize;
         // update the provider's minimum deposit
