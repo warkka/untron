@@ -118,4 +118,78 @@ interface IUntronCore is IUntronTransfers, IUntronFees, IUntronZK, IUntronState 
     ///                 for their USDT Tron.
     function createOrder(address provider, address receiver, uint256 size, uint256 rate, Transfer calldata transfer)
         external;
+
+    /// @notice Changes the transfer details of an order.
+    /// @param orderId The ID of the order to change.
+    /// @param transfer The new transfer details.
+    /// @dev The transfer details can only be changed before the order is fulfilled.
+    function changeOrder(bytes32 orderId, Transfer calldata transfer) external;
+
+    /// @notice Stops the order and returns the remaining liquidity to the provider.
+    /// @param orderId The ID of the order to stop.
+    /// @dev The order can only be stopped before it's fulfilled.
+    ///      Closing and stopping the order are different things.
+    ///      Closing means that provider's funds are unlocked to either the order creator or the provider
+    ///      as the order completed its listening cycle.
+    ///      Stopping means that the order no longer needs listening for new USDT Tron transfers
+    ///      and won't be fulfilled.
+    function stopOrder(bytes32 orderId) external;
+
+    /// @notice Helper function that calculates the fulfiller's total expense and income given the receivers.
+    /// @param _receivers The addresses of the receivers.
+    /// @return totalExpense The total expense in USDT L2.
+    /// @return totalProfit The total profit in USDT L2.
+    function calculateFulfillerTotal(address[] calldata _receivers)
+        external
+        view
+        returns (uint256 totalExpense, uint256 totalProfit);
+
+    /// @notice Fulfills the orders by sending their ask in advance.
+    /// @param _receivers The addresses of the receivers.
+    /// @param total The total amount of USDT L2 to transfer.
+    /// @dev Fulfillment exists because ZK proofs that actually *close* the orders
+    ///      are published every 60-90 minutes. This means that provider's funds
+    ///      will only be unlocked to them or to order creators with this delay.
+    ///      However, we want the order creators to receive the funds ASAP.
+    ///      Fulfillers send order creators' ask in advance when they see that their USDT
+    ///      transfer happened on Tron blockchain, but wasn't ZK proven yet.
+    ///      After the transfer is ZK proven, they'll receive the full amount of
+    ///      USDT L2.
+    ///      Fulfillers take the fee for the service, which depends on complexity of the transfer
+    ///      (if it requires a swap or not, what's the chain of the transfer, etc).
+    function fulfill(address[] calldata _receivers, uint256 total) external;
+
+    /// @notice Closes the orders and sends the funds to the providers or order creators, if not fulfilled.
+    /// @param proof The ZK proof.
+    /// @param publicValues The public values for the proof and order closure.
+    function closeOrders(bytes calldata proof, bytes calldata publicValues) external;
+
+    /// @notice Sets the liquidity provider details.
+    /// @param liquidity The liquidity of the provider in USDT L2.
+    /// @param rate The rate (USDT L2 per 1 USDT Tron) of the provider.
+    /// @param minOrderSize The minimum size of the order in USDT Tron.
+    /// @param minDeposit The minimum amount the order creator can transfer to the receiver, in USDT Tron.
+    ///                   This is needed for so-called "reverse swaps", when the provider is
+    ///                   actually a normal order creator who wants to swap USDT L2 for USDT Tron,
+    ///                   and the order creator (who creates the orders) is an automated entity,
+    ///                   called "sender", that accepts such orders and performs transfers on Tron network.
+    ///                   order creators doing reverse swaps usually want to receive the entire order size
+    ///                   in a single transfer, hence the need for minDeposit.
+    ///                   minOrderSize == liquidity * rate signalizes for senders that the provider
+    ///                   is a order creator performing a reverse swap.
+    /// @param receivers The provider's Tron addresses that are used to receive USDT Tron.
+    ///                  The more receivers the provider has, the more concurrent orders the provider can have.
+    function setProvider(
+        uint256 liquidity,
+        uint256 rate,
+        uint256 minOrderSize,
+        uint256 minDeposit,
+        address[] calldata receivers
+    ) external;
+
+    /// @notice Frees the receivers that are busy with expired orders.
+    /// @param receivers The addresses of the receivers.
+    /// @dev Rationale: it's practically unfeasible to bloat the state with dead orders,
+    ///      but if this happens, this function can be used to clean it up.
+    function freeReceivers(address[] calldata receivers) external;
 }
