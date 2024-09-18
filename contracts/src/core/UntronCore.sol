@@ -16,6 +16,8 @@ import "./UntronZK.sol";
 /// @notice This contract contains the main logic of the Untron protocol.
 ///         It's designed to be fully upgradeable and modular, with each module being a separate contract.
 abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUntronCore {
+    uint256 constant ORDER_TTL = 300; // 5 minutes
+
     /// @notice Initializes the core with the provided parameters.
     /// @param _blockId The ID of the latest ZK proven block of Tron blockchain.
     /// @param _stateHash The state hash of the latest ZK proven block of Tron blockchain.
@@ -153,7 +155,17 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         (uint256 amount,) = conversion(size, rate, 0, false);
         uint256 providerMinDeposit = _providers[provider].minDeposit;
 
-        require(_isReceiverBusy[receiver] == bytes32(0), "Receiver is busy");
+        if (_isReceiverBusy[receiver] != bytes32(0)) {
+            // if the receiver is busy, check if the order that made it busy is not expired yet
+            require(
+                _orders[_isReceiverBusy[receiver]].timestamp + ORDER_TTL < unixToTron(block.timestamp),
+                "Receiver is busy"
+            );
+            // if it's expired, stop it manually
+            updateActionChain(receiver, 0);
+            // and make the receiver not busy
+            _isReceiverBusy[receiver] = bytes32(0);
+        }
         require(_receiverOwners[receiver] == provider, "Receiver is not owned by provider");
         require(_providers[provider].liquidity >= amount, "Provider does not have enough liquidity");
         require(rate == _providers[provider].rate, "Rate does not match provider's rate");
@@ -398,8 +410,6 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
             // new block ID is the new latest (zk proven) block ID of Tron blockchain
             // all blocks revealed by the ZK proof are finalized in the Tron network
             bytes32 newBlockId,
-            // new timestamp is the timestamp of the new latest (zk proven) block of Tron blockchain
-            uint256 newTimestamp,
             // "previous executed action" is the latest action that was executed in the previous run
             // of the ZK program. (latestExecutedAction)
             bytes32 prevExecutedAction,
@@ -414,7 +424,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
             bytes32 newStateHash,
             // closed orders are the orders that are being closed in this run of the ZK program.
             Inflow[] memory closedOrders
-        ) = abi.decode(publicValues, (bytes32, bytes32, uint256, bytes32, bytes32, bytes32, bytes32, Inflow[]));
+        ) = abi.decode(publicValues, (bytes32, bytes32, bytes32, bytes32, bytes32, bytes32, Inflow[]));
 
         // check that the old block ID is the latest block ID that was ZK proven (blockId)
         require(oldBlockId == blockId, "Public input block id is not the latest ZK proven block id");
@@ -422,13 +432,6 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         require(
             prevExecutedAction == latestExecutedAction,
             "Public input previous executed action is not the latest ZK proven action"
-        );
-        // require that the timestamp of the new executed order is greater than or equal
-        // to the timestamp of the new latest (zk proven) block of Tron blockchain.
-        // this is needed to prevent the relayer from censoring orders until they expire.
-        require(
-            _orders[newExecutedAction].timestamp >= newTimestamp,
-            "Latest action is required to happen after the timestamp of the latest ZK proven Tron block"
         );
         // check that the old state hash is equal to the current state hash
         // this is needed to prevent the relayer from modifying the state in the ZK program.
@@ -535,6 +538,23 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         _providers[msg.sender].minOrderSize = minOrderSize;
         // update the provider's minimum deposit
         _providers[msg.sender].minDeposit = minDeposit;
+
+        // iterate over receivers to ensure all are not busy or busy with already expired orders
+        for (uint256 i = 0; i < receivers.length; i++) {
+            // if the receiver is already busy, ensure that the order is expired
+            if (_isReceiverBusy[receivers[i]] != bytes32(0)) {
+                require(
+                    _orders[_isReceiverBusy[receivers[i]]].timestamp + ORDER_TTL < unixToTron(block.timestamp),
+                    "One of the current receivers is busy"
+                );
+                // set the receiver as not busy
+                _isReceiverBusy[receivers[i]] = bytes32(0);
+                // set the receiver owner to zero address
+                // TODO: i don't recall if we even use _receiverOwners tbh
+                _receiverOwners[receivers[i]] = address(0);
+            }
+        }
+
         // update the provider's receivers
         _providers[msg.sender].receivers = receivers;
 
@@ -550,5 +570,22 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
 
         // Emit ProviderUpdated event
         emit ProviderUpdated(msg.sender, liquidity, rate, minOrderSize, minDeposit);
+    }
+
+    /// @notice Frees the receivers that are busy with expired orders.
+    /// @param receivers The addresses of the receivers.
+    /// @dev Rationale: it's practically unfeasible to bloat the state with dead orders,
+    ///      but if this happens, this function can be used to clean it up.
+    function freeReceivers(address[] calldata receivers) external {
+        // iterate over the receivers
+        for (uint256 i = 0; i < receivers.length; i++) {
+            // if the receiver is busy with an expired order, free it
+            if (
+                _isReceiverBusy[receivers[i]] != bytes32(0)
+                    && _orders[_isReceiverBusy[receivers[i]]].timestamp + ORDER_TTL < unixToTron(block.timestamp)
+            ) {
+                _isReceiverBusy[receivers[i]] = bytes32(0);
+            }
+        }
     }
 }
