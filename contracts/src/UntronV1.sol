@@ -5,10 +5,9 @@ import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol"
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "./core/UntronCore.sol";
-import "./v1/RLPaymaster.sol";
 import "./interfaces/IUntronV1.sol";
 
-contract UntronV1 is Initializable, UntronCore, UUPSUpgradeable, RLPaymaster, IUntronV1 {
+contract UntronV1 is Initializable, UntronCore, UUPSUpgradeable, IUntronV1 {
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -24,49 +23,48 @@ contract UntronV1 is Initializable, UntronCore, UUPSUpgradeable, RLPaymaster, IU
         uint256 _relayerFee,
         uint256 _feePoint,
         address _verifier,
-        bytes32 _vkey,
-        uint256 _rate,
-        uint256 _per
+        bytes32 _vkey
     ) public initializer {
         __UUPSUpgradeable_init();
         __UntronCore_init(
             _blockId, _stateHash, _maxOrderSize, _spokePool, _usdt, _swapper, _relayerFee, _feePoint, _verifier, _vkey
         );
-        _changeRateLimit(_rate, _per);
     }
 
-    /// @notice Access Control role for unlimited order creation.
-    /// @dev This role will be delegated to Untron team for integrations with projects not on ZKsync Era
-    ///      so they could create orders on behalf of the protocol without creating accounts on Era.
-    ///      We expect this design to be temporary and to be replaced with a more flexible and secure
-    ///      design in the future.
-    bytes32 public constant UNLIMITED_CREATOR_ROLE = keccak256("UNLIMITED_CREATOR_ROLE");
+    /// @inheritdoc IUntronV1
+    function estimateCollateral(address, address, uint256 size, uint256 rate, Transfer memory)
+        public
+        view
+        returns (uint256)
+    {
+        // the collateral is min(10 USDT, 1% of the amount)
+        (uint256 amount,) = conversion(size, rate, 0, false);
+        uint256 onePercent = amount / 100;
+        return onePercent < 10e6 ? 10e6 : onePercent;
+    }
+
+    mapping(address => uint256) internal _collateral;
 
     /// @inheritdoc UntronCore
-    function _canCreateOrder(address provider, address, uint256, uint256, Transfer memory)
+    function _whenReceiverIsFreed(address receiver, bool dueToExpiry) internal override {
+        bytes32 orderId = _isReceiverBusy[receiver];
+        address creator = _orders[orderId].creator;
+        uint256 collateral = _collateral[creator];
+        internalTransfer(dueToExpiry ? _orders[orderId].provider : creator, collateral);
+    }
+
+    /// @inheritdoc UntronCore
+    function _canCreateOrder(address provider, address receiver, uint256 size, uint256 rate, Transfer memory transfer)
         internal
         override
         returns (bool result)
     {
-        // if the provider is a reversed order initiator, then the order creator must have UNLIMITED_CREATOR_ROLE,
-        // because execution of reversed orders is trusted in Untron V1 implementation. We'll make it trustless
-        // and collateral-based in the next versions of Untron.
-        // otherwise, the order creator must either not exceed their rate limit or have the UNLIMITED_CREATOR_ROLE.
-        if (hasRole(UNLIMITED_CREATOR_ROLE, msg.sender)) {
-            result = true;
-        } else if (
-            (_providers[provider].minDeposit != _providers[provider].minOrderSize)
-                && _hasDelayPassed(_selector(), msg.sender, rate, per)
-        ) {
-            // isFunded is a flag set in the paymaster. If the paymaster is used, the flag is set to true.
-            // This is so that we don't trigger _logCall twice, as it's also triggered in the paymaster.
-            if (!isFunded[msg.sender]) {
-                _logCall(msg.sender, _selector());
-            } else {
-                isFunded[msg.sender] = false;
-            }
-            result = true;
-        }
+        require(_collateral[msg.sender] == 0, "Order creator has a running order");
+
+        uint256 collateral = estimateCollateral(provider, receiver, size, rate, transfer);
+        internalTransferFrom(msg.sender, collateral);
+        _collateral[msg.sender] = collateral;
+        result = true;
     }
 
     /// @notice Authorizes the upgrade of the contract.
