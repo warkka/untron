@@ -89,11 +89,11 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
     /// @notice Mapping to store provider details.
     mapping(address => Provider) internal _providers;
     /// @notice Mapping to store whether a receiver is busy with an order.
-    mapping(address => bytes32) internal _isReceiverBusy;
+    mapping(address => bytes32) private _isReceiverBusy;
     /// @notice Mapping to store the owner (provider) of a receiver.
-    mapping(address => address) internal _receiverOwners;
+    mapping(address => address) private _receiverOwners;
     /// @notice Mapping to store order details by order ID.
-    mapping(bytes32 => Order) internal _orders;
+    mapping(bytes32 => Order) private _orders;
 
     /// @notice Returns the provider details for a given address
     /// @param provider The address of the provider
@@ -175,7 +175,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
                 "Receiver is busy"
             );
             // if it's expired, stop it manually
-            _freeReceiver(receiver, true);
+            _freeReceiver(receiver);
         }
         require(_receiverOwners[receiver] == provider, "Receiver is not owned by provider");
         require(_providers[provider].liquidity >= amount, "Provider does not have enough liquidity");
@@ -256,13 +256,15 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
             _orders[orderId].creator == msg.sender && !_orders[orderId].isFulfilled, "Only creator can stop the order"
         );
 
-        // update the action chain with stop action,
-        // free the receiver address and
-        // delete the order from the orders mapping
-        _freeReceiver(_orders[orderId].receiver, false);
+        // update the action chain with stop action
+        _freeReceiver(_orders[orderId].receiver);
 
         // return the liquidity back to the provider
         _providers[_orders[orderId].provider].liquidity += _orders[orderId].size;
+
+        // delete the order because it won't be fulfilled/closed
+        // (stopOrder assumes that the order creator sent nothing)
+        delete _orders[orderId];
 
         // Emit OrderStopped event
         emit OrderStopped(orderId);
@@ -331,7 +333,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
             smartTransfer(order.transfer, amount);
 
             // update action chain to free the receiver address
-            _freeReceiver(_receivers[i], false);
+            _freeReceiver(_receivers[i]);
 
             // update the order details
 
@@ -457,7 +459,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
 
             if (!_orders[orderId].isFulfilled) {
                 // if the order is not fulfilled, update the action chain to free the receiver address
-                _freeReceiver(_orders[orderId].receiver, false);
+                _freeReceiver(_orders[orderId].receiver);
             }
 
             // TODO: there might be a conversion bug idk
@@ -522,7 +524,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
                     "One of the current receivers is busy"
                 );
                 // set the receiver as not busy
-                _freeReceiver(receivers[i], true);
+                _freeReceiver(receivers[i]);
                 // set the receiver owner to zero address
                 // TODO: i don't recall if we even use _receiverOwners tbh
                 _receiverOwners[receivers[i]] = address(0);
@@ -546,19 +548,10 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         emit ProviderUpdated(msg.sender, liquidity, rate, minOrderSize, minDeposit);
     }
 
-    /// @notice This function may be used to implement logic related to core wrappers such as V1.
-    /// @dev This function is called within _freeReceiver, thus, only when the receiver is freed.
-    /// @param receiver The address of the receiver that is freed.
-    /// @param dueToExpiry Whether the receiver is freed due to order expiry.
-    function _whenReceiverIsFreed(address receiver, bool dueToExpiry) internal virtual;
-
     /// @notice Frees the receiver by setting it as not busy and updating the action chain with closure action.
     /// @param receiver The address of the receiver to be freed
     /// @dev does not implement checks if the closure is legitimate; must be implemented by the caller function
-    function _freeReceiver(address receiver, bool dueToExpiry) internal {
-        _whenReceiverIsFreed(receiver, dueToExpiry);
-
-        delete _orders[_isReceiverBusy[receiver]]; // TODO: determine if this is safe
+    function _freeReceiver(address receiver) internal {
         _isReceiverBusy[receiver] = bytes32(0);
         updateActionChain(receiver, 0);
     }
@@ -572,7 +565,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
                 _isReceiverBusy[receivers[i]] != bytes32(0)
                     && _orders[_isReceiverBusy[receivers[i]]].timestamp + ORDER_TTL < unixToTron(block.timestamp)
             ) {
-                _freeReceiver(receivers[i], true);
+                _freeReceiver(receivers[i]);
             }
         }
     }
