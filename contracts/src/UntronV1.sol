@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "./core/UntronCore.sol";
@@ -72,5 +72,5 @@ contract UntronV1 is Initializable, UntronCore, UUPSUpgradeable, RLPaymaster, IU
     /// @notice Authorizes the upgrade of the contract.
     /// @param newImplementation The address of the new implementation.
     /// @dev This is a UUPS-related function.
-    function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {}
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }

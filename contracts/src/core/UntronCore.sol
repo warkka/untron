@@ -3,8 +3,7 @@ pragma solidity ^0.8.20;
 
 // import "forge-std/console.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "../interfaces/core/IUntronCore.sol";
 import "./UntronTransfers.sol";
 import "./UntronTools.sol";
@@ -15,7 +14,14 @@ import "./UntronZK.sol";
 /// @author Ultrasound Labs
 /// @notice This contract contains the main logic of the Untron protocol.
 ///         It's designed to be fully upgradeable and modular, with each module being a separate contract.
-abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUntronCore {
+abstract contract UntronCore is
+    Initializable,
+    OwnableUpgradeable,
+    UntronTransfers,
+    UntronFees,
+    UntronZK,
+    IUntronCore
+{
     uint256 constant ORDER_TTL = 300; // 5 minutes
 
     /// @notice Initializes the core with the provided parameters.
@@ -43,9 +49,6 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         address _verifier,
         bytes32 _vkey
     ) public onlyInitializing {
-        // initialize Access Control
-        __AccessControl_init();
-
         // initialize UntronTransfers
         __UntronTransfers_init(_spokePool, _usdt, _swapper);
 
@@ -55,9 +58,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         // initialize UntronZK
         __UntronZK_init(_verifier, _vkey);
 
-        // grant all necessary roles to msg.sender
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(UPGRADER_ROLE, msg.sender);
+        _transferOwnership(msg.sender);
 
         blockId = _blockId;
         stateHash = _stateHash;
@@ -78,7 +79,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         bytes32 _latestExecutedAction,
         bytes32 _stateHash,
         uint256 _maxOrderSize
-    ) external onlyRole(UPGRADER_ROLE) {
+    ) external onlyOwner {
         blockId = _blockId;
         actionChainTip = _actionChainTip;
         latestExecutedAction = _latestExecutedAction;
@@ -362,32 +363,10 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         }
     }
 
-    /// @notice The timestamp of the last relayer activity.
-    /// @dev Used to make closing orders permissionless in case all relayers are down for more than 12 hours.
-    uint256 public lastRelayerActivity;
-
-    /// @notice The role for the relayers.
-    /// @dev Relayer is a role that is responsible for closing the orders.
-    ///      They generate and publish ZK proofs for Tron blockchain and its contents, in exchange for a fee (in percents; see relayerFee in UntronState).
-    ///      If all relayers are down for more than 12 hours, relaying becomes permissionless (see lastRelayerActivity).
-    bytes32 public constant RELAYER_ROLE = keccak256("RELAYER_ROLE");
-
     /// @notice Closes the orders and sends the funds to the providers or order creators, if not fulfilled.
     /// @param proof The ZK proof.
     /// @param publicValues The public values for the proof and order closure.
     function closeOrders(bytes calldata proof, bytes calldata publicValues) external {
-        bool isRelayer = hasRole(RELAYER_ROLE, msg.sender);
-        // Check if the sender has the relayer role or if all relayers are inactive
-        require(
-            isRelayer || (block.timestamp - lastRelayerActivity > 12 hours),
-            "Caller is not a relayer and relayers are not inactive"
-        );
-
-        // Update the last active timestamp for relayers if the caller is a relayer
-        if (isRelayer) {
-            lastRelayerActivity = block.timestamp;
-        }
-
         // verify the ZK proof with the public values
         // verifying logic is defined in the UntronZK contract.
         // currently it wraps SP1 zkVM verifier.

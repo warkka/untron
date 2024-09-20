@@ -2,14 +2,15 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "../interfaces/core/external/V3SpokePoolInterface.sol";
 import "../interfaces/core/external/IAggregationRouterV6.sol";
 import "../interfaces/core/IUntronTransfers.sol";
-import "./UntronState.sol";
 import "./UntronTools.sol";
 
-/// @title Extensive transfer module for Untron
+/// @title Extensive pausable transfer module for Untron
 /// @author Ultrasound Labs
 /// @notice This module is responsible for handling all the transfers in the Untron protocol.
 /// @dev Transfer, within Untron terminology (unless specified otherwise: USDT transfer, Tron transfer, etc),
@@ -17,7 +18,15 @@ import "./UntronTools.sol";
 ///      Natively, these tokens are USDT L2 (on ZKsync Era, Untron's host chain).
 ///      However, the module is designed to be as chain- and coin-agnostic as possible,
 ///      so it supports on-the-fly swaps of USDT L2 to other coins and cross-chain transfers through Across bridge.
-abstract contract UntronTransfers is IUntronTransfers, UntronTools, Initializable, UntronState {
+///      Only this module must be used to manage the funds in the Untron protocol,
+///      as it contains the pausing logic in case of emergency.
+abstract contract UntronTransfers is
+    IUntronTransfers,
+    UntronTools,
+    Initializable,
+    PausableUpgradeable,
+    OwnableUpgradeable
+{
     /// @notice Initializes the contract with the provided parameters.
     /// @param _spokePool The address of the Across bridge's SpokePool contract.
     /// @param _usdt The address of the USDT token.
@@ -25,6 +34,14 @@ abstract contract UntronTransfers is IUntronTransfers, UntronTools, Initializabl
     ///                  In our case, it's 1inch V6 aggregation router.
     function __UntronTransfers_init(address _spokePool, address _usdt, address _swapper) internal onlyInitializing {
         _setTransfersVariables(_usdt, _spokePool, _swapper);
+    }
+
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    function unpause() external onlyOwner {
+        _unpause();
     }
 
     // UntronTransfers variables
@@ -39,11 +56,7 @@ abstract contract UntronTransfers is IUntronTransfers, UntronTools, Initializabl
     }
 
     /// @inheritdoc IUntronTransfers
-    function setTransfersVariables(address _usdt, address _spokePool, address _swapper)
-        external
-        override
-        onlyRole(UPGRADER_ROLE)
-    {
+    function setTransfersVariables(address _usdt, address _spokePool, address _swapper) external override onlyOwner {
         _setTransfersVariables(_usdt, _spokePool, _swapper);
     }
 
@@ -84,25 +97,10 @@ abstract contract UntronTransfers is IUntronTransfers, UntronTools, Initializabl
         );
     }
 
-    /// @notice Excessive output amount after the swap.
-    /// @dev in some swaps, the order creator wants to receive specific amount,
-    ///      but the swap function might return slightly more.
-    ///      Therefore, if fixedOutput is specified in the transfer,
-    ///      we take the excessive amount and add it to the leftovers.
-    ///      Leftovers are left for Untron team :D
-    uint256 internal leftovers;
-
-    /// @notice Withdraws the leftovers to the Untron team.
-    /// @dev Only callable by the default admin role.
-    function withdrawLeftovers() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(IERC20(usdt).transfer(msg.sender, leftovers));
-        leftovers = 0;
-    }
-
     /// @notice Performs the transfer.
     /// @param transfer The transfer details.
     /// @param amount The amount of USDT to transfer.
-    function smartTransfer(Transfer memory transfer, uint256 amount) internal {
+    function smartTransfer(Transfer memory transfer, uint256 amount) internal whenNotPaused {
         // if the transfer requires a swap, perform the swap
         if (transfer.doSwap) {
             // approve the swapper to spend the USDT.
@@ -112,11 +110,11 @@ abstract contract UntronTransfers is IUntronTransfers, UntronTools, Initializabl
             uint256 output = swapUSDT(transfer, amount);
 
             // if the transfer requires a fixed output amount,
-            // we take the excessive amount and add it to the leftovers
+            // we take the excessive amount and transfer it to the protocol owner
             if (transfer.fixedOutput) {
                 amount = transfer.minOutputPerUSDT * amount / 1e6 + transfer.acrossFee;
                 require(output >= amount, "Insufficient output amount");
-                leftovers += output - amount;
+                internalTransfer(owner(), output - amount);
             } else {
                 // if the transfer doesn't require a fixed output amount,
                 // the order creator will receive the entire output amount
@@ -152,7 +150,7 @@ abstract contract UntronTransfers is IUntronTransfers, UntronTools, Initializabl
     /// @param amount the amount of USDT to transfer
     /// @dev transfers USDT zksync to "to" address.
     ///      needed for fulfiller/relayer-related operations and inside the smartTransfer function.
-    function internalTransfer(address to, uint256 amount) internal {
+    function internalTransfer(address to, uint256 amount) internal whenNotPaused {
         require(IERC20(usdt).transfer(to, amount));
     }
 
@@ -161,7 +159,7 @@ abstract contract UntronTransfers is IUntronTransfers, UntronTools, Initializabl
     /// @param amount the amount of USDT to transfer
     /// @dev transfers USDT zksync from "from" to this contract.
     ///      needed for fulfiller/relayer-related operations and inside the smartTransfer function.
-    function internalTransferFrom(address from, uint256 amount) internal {
+    function internalTransferFrom(address from, uint256 amount) internal whenNotPaused {
         require(IERC20(usdt).transferFrom(from, address(this), amount));
     }
 }

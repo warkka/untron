@@ -2,14 +2,13 @@
 pragma solidity ^0.8.20;
 
 import "./IUntronTransfers.sol";
-import "./IUntronState.sol";
 import "./IUntronZK.sol";
 import "./IUntronFees.sol";
 
 /// @title Interface for the UntronCore contract
 /// @author Ultrasound Labs
 /// @notice This interface defines the functions and structs used in the UntronCore contract.
-interface IUntronCore is IUntronTransfers, IUntronFees, IUntronZK, IUntronState {
+interface IUntronCore is IUntronTransfers, IUntronFees, IUntronZK {
     /// @notice Struct representing a Tron->L2 order in the Untron protocol
     struct Order {
         // the tip of the action chain before this order was created
