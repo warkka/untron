@@ -410,7 +410,7 @@ abstract contract UntronCore is
         latestExecutedAction = newExecutedAction;
         stateHash = newStateHash;
 
-        // this variable is used to calculate the total fee that the relayer will receive
+        // this variable is used to calculate the total fee that the protocol owner (DAO) will receiver for relayer services
         uint256 totalFee;
 
         // iterate over the closed orders
@@ -424,7 +424,7 @@ abstract contract UntronCore is
             uint256 minInflow =
                 closedOrders[i].inflow < _orders[orderId].size ? closedOrders[i].inflow : _orders[orderId].size;
 
-            // calculate the amount and fee the order creator/fulfiller will receive
+            // calculate the amount the order creator/fulfiller will receive and fee for the protocol
             (uint256 amount, uint256 fee) = conversion(minInflow, _orders[orderId].rate, 0, true);
             // add the fee to the total fee
             totalFee += fee;
@@ -452,8 +452,8 @@ abstract contract UntronCore is
             emit OrderClosed(orderId, msg.sender);
         }
 
-        // pay the relayer for the service
-        internalTransfer(msg.sender, totalFee);
+        // transfer the fee to the protocol
+        internalTransfer(owner(), totalFee);
 
         // emit the RelayUpdated event
         emit RelayUpdated(msg.sender, blockId, latestExecutedAction, stateHash);

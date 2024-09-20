@@ -58,11 +58,11 @@ abstract contract UntronFees is IUntronFees, UntronTools, Initializable, Ownable
     /// @param fixedFee The fixed fee for the transfer (normally taken by the fulfiller).
     /// @param includeRelayerFee Whether to include the relayer fee in the conversion.
     /// @return value The value of the transfer in USDT L2.
-    /// @return fee The fee for the transfer in USDT L2.
+    /// @return _relayerFee The fee for the transfer in USDT L2.
     function conversion(uint256 size, uint256 rate, uint256 fixedFee, bool includeRelayerFee)
         internal
         view
-        returns (uint256 value, uint256 fee)
+        returns (uint256 value, uint256 _relayerFee)
     {
         // convert size into USDT L2 based on the rate
         uint256 out = (size * rate / bp);
@@ -71,7 +71,7 @@ abstract contract UntronFees is IUntronFees, UntronTools, Initializable, Ownable
             // subtract relayer fee from the converted size
             value = out * (bp - relayerFee) / bp;
             // and write the fee to the fee variable
-            fee = out - value;
+            _relayerFee = out - value;
         } else {
             // if the relayer fee is not included, the value is just converted size (size * rate)
             value = out;
