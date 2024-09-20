@@ -5,9 +5,9 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "../interfaces/core/external/V3SpokePoolInterface.sol";
-import "../interfaces/core/external/IAggregationRouterV6.sol";
-import "../interfaces/core/IUntronTransfers.sol";
+import "./interfaces/external/V3SpokePoolInterface.sol";
+import "./interfaces/external/IAggregationRouterV6.sol";
+import "./interfaces/IUntronTransfers.sol";
 import "./UntronTools.sol";
 
 /// @title Extensive pausable transfer module for Untron

@@ -28,6 +28,8 @@ interface IUntronCore is IUntronTransfers, IUntronFees, IUntronZK {
         uint256 rate;
         // the minimum deposit in USDT Tron
         uint256 minDeposit;
+        // order creator's collateral for the order (in USDT L2)
+        uint256 collateral;
         // boolean indicating if the order is fulfilled. If it is then the order creator is the fulfiller.
         // if not, then it is simply the order creator.
         bool isFulfilled;
@@ -92,17 +94,26 @@ interface IUntronCore is IUntronTransfers, IUntronFees, IUntronZK {
     function receiverOwners(address receiver) external view returns (address);
     function orders(bytes32 orderId) external view returns (Order memory);
 
+    function blockId() external view returns (bytes32);
+    function actionChainTip() external view returns (bytes32);
+    function latestExecutedAction() external view returns (bytes32);
+    function stateHash() external view returns (bytes32);
+    function maxOrderSize() external view returns (uint256);
+    function requiredCollateral() external view returns (uint256);
+
     /// @notice Updates the UntronCore-related variables
     /// @param _blockId The new block ID of the latest zk proven Tron block
     /// @param _actionChainTip The new action chain tip
     /// @param _latestExecutedAction The new latest performed action from the action chain
     /// @param _stateHash The new hash of the latest state of Untron ZK program
+    /// @param _requiredCollateral The new required collateral for creating an order
     function setCoreVariables(
         bytes32 _blockId,
         bytes32 _actionChainTip,
         bytes32 _latestExecutedAction,
         bytes32 _stateHash,
-        uint256 _maxOrderSize
+        uint256 _maxOrderSize,
+        uint256 _requiredCollateral
     ) external;
 
     /// @notice The order creation function
@@ -185,10 +196,4 @@ interface IUntronCore is IUntronTransfers, IUntronFees, IUntronZK {
         uint256 minDeposit,
         address[] calldata receivers
     ) external;
-
-    /// @notice Frees the receivers that are busy with expired orders.
-    /// @param receivers The addresses of the receivers.
-    /// @dev Rationale: it's practically unfeasible to bloat the state with dead orders,
-    ///      but if this happens, this function can be used to clean it up.
-    function freeReceivers(address[] calldata receivers) external;
 }

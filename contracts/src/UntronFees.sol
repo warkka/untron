@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import "../interfaces/core/IUntronFees.sol";
+import "./interfaces/IUntronFees.sol";
 import "./UntronTools.sol";
 
 /// @title Module for calculating fees in Untron protocol.
