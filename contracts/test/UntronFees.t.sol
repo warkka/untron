@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../src/UntronV1.sol";
+import "../src/UntronCore.sol";
 import "./mocks/MockSpokePool.sol";
 import "./mocks/MockAggregationRouter.sol";
 import "@sp1-contracts/SP1MockVerifier.sol";
@@ -18,8 +18,8 @@ contract MockUSDT is ERC20 {
 }
 
 contract UntronFeesTest is Test {
-    UntronV1 untronFeesImplementation;
-    UntronV1 untronFees;
+    UntronCore untronFeesImplementation;
+    UntronCore untronFees;
     MockSpokePool spokePool;
     MockAggregationRouter aggregationRouter;
     SP1MockVerifier sp1Verifier;
@@ -40,10 +40,10 @@ contract UntronFeesTest is Test {
         usdt = new MockUSDT();
 
         // Use UntronCore since UntronFees is abstract
-        untronFeesImplementation = new UntronV1();
+        untronFeesImplementation = new UntronCore();
         // Prepare the initialization data
         bytes memory initData = abi.encodeWithSelector(
-            UntronV1.initialize.selector,
+            UntronCore.initialize.selector,
             bytes32(0), // blockId
             bytes32(0), // stateHash
             1000e6, // maxOrderSize
@@ -53,22 +53,19 @@ contract UntronFeesTest is Test {
             100, // relayerFee
             10000, // feePoint
             address(sp1Verifier),
-            bytes32(0), // vkey
-            10, // rate
-            24 hours // per
+            bytes32(0) // vkey
         );
 
         // Deploy the proxy, pointing to the implementation and passing the init data
         ERC1967Proxy proxy = new ERC1967Proxy(address(untronFeesImplementation), initData);
-        untronFees = UntronV1(address(proxy));
-        untronFees.grantRole(untronFees.UPGRADER_ROLE(), admin);
+        untronFees = UntronCore(address(proxy));
 
         vm.stopPrank();
     }
 
     function test_setUp() public view {
         // Check role
-        assertEq(untronFees.hasRole(untronFees.UPGRADER_ROLE(), admin), true);
+        assertEq(untronFees.owner(), admin);
     }
 
     function test_setUntronFeesVariables_SetVariables() public {
