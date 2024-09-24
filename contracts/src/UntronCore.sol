@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
-import "forge-std/console.sol";
+// import "forge-std/console.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "./interfaces/IUntronCore.sol";
@@ -394,10 +394,6 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
             (uint256 amount, uint256 fee) = conversion(minInflow, _orders[orderId].rate, 0, true);
             // add the fee to the total fee
             totalFee += fee;
-
-            console.log("minInflow", minInflow);
-            console.log("amount", amount);
-            console.log("fee", fee);
 
             // remove fixed output flag to make the transfer unrevertable
             // (if the order creator hadn't changed the transfer details by that time it's their fault tbh)
