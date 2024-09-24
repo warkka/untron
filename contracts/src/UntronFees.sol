@@ -2,14 +2,14 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "../interfaces/core/IUntronFees.sol";
-import "./UntronState.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "./interfaces/IUntronFees.sol";
 import "./UntronTools.sol";
 
 /// @title Module for calculating fees in Untron protocol.
 /// @author Ultrasound Labs
 /// @notice This contract implements logic for calculating over fees and rates in Untron protocol.
-abstract contract UntronFees is IUntronFees, UntronTools, Initializable, UntronState {
+abstract contract UntronFees is IUntronFees, UntronTools, Initializable, OwnableUpgradeable {
     /// @notice The number of basis points in 100%.
     uint256 constant bp = 1000000; // min 0.000001 i.e 0.0001%. made for consistency with usdt decimals
     /// @notice Initializes the contract with the provided parameters.
@@ -30,7 +30,7 @@ abstract contract UntronFees is IUntronFees, UntronTools, Initializable, UntronS
     }
 
     /// @inheritdoc IUntronFees
-    function setFeesVariables(uint256 _relayerFee, uint256 _feePoint) external override onlyRole(UPGRADER_ROLE) {
+    function setFeesVariables(uint256 _relayerFee, uint256 _feePoint) external override onlyOwner {
         _setFeesVariables(_relayerFee, _feePoint);
     }
 
@@ -58,11 +58,11 @@ abstract contract UntronFees is IUntronFees, UntronTools, Initializable, UntronS
     /// @param fixedFee The fixed fee for the transfer (normally taken by the fulfiller).
     /// @param includeRelayerFee Whether to include the relayer fee in the conversion.
     /// @return value The value of the transfer in USDT L2.
-    /// @return fee The fee for the transfer in USDT L2.
+    /// @return _relayerFee The fee for the transfer in USDT L2.
     function conversion(uint256 size, uint256 rate, uint256 fixedFee, bool includeRelayerFee)
         internal
         view
-        returns (uint256 value, uint256 fee)
+        returns (uint256 value, uint256 _relayerFee)
     {
         // convert size into USDT L2 based on the rate
         uint256 out = (size * rate / bp);
@@ -71,7 +71,7 @@ abstract contract UntronFees is IUntronFees, UntronTools, Initializable, UntronS
             // subtract relayer fee from the converted size
             value = out * (bp - relayerFee) / bp;
             // and write the fee to the fee variable
-            fee = out - value;
+            _relayerFee = out - value;
         } else {
             // if the relayer fee is not included, the value is just converted size (size * rate)
             value = out;

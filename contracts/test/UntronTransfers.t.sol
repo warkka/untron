@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../src/UntronV1.sol";
+import "../src/UntronCore.sol";
 import "./mocks/MockSpokePool.sol";
 import "./mocks/MockAggregationRouter.sol";
 import "@sp1-contracts/SP1MockVerifier.sol";
@@ -18,8 +18,8 @@ contract MockUSDT is ERC20 {
 }
 
 contract UntronTransfersTest is Test {
-    UntronV1 untronTransfersImplementation;
-    UntronV1 untronTransfers;
+    UntronCore untronTransfersImplementation;
+    UntronCore untronTransfers;
     MockSpokePool spokePool;
     MockAggregationRouter aggregationRouter;
     SP1MockVerifier sp1Verifier;
@@ -40,10 +40,10 @@ contract UntronTransfersTest is Test {
         usdt = new MockUSDT();
 
         // Use UntronCore since UntronFees is abstract
-        untronTransfersImplementation = new UntronV1();
+        untronTransfersImplementation = new UntronCore();
         // Prepare the initialization data
         bytes memory initData = abi.encodeWithSelector(
-            UntronV1.initialize.selector,
+            UntronCore.initialize.selector,
             bytes32(0), // blockId
             bytes32(0), // stateHash
             1000e6, // maxOrderSize
@@ -53,15 +53,12 @@ contract UntronTransfersTest is Test {
             100, // relayerFee
             10000, // feePoint
             address(sp1Verifier),
-            bytes32(0), // vkey
-            10, // rate
-            24 hours // per
+            bytes32(0) // vkey
         );
 
         // Deploy the proxy, pointing to the implementation and passing the init data
         ERC1967Proxy proxy = new ERC1967Proxy(address(untronTransfersImplementation), initData);
-        untronTransfers = UntronV1(address(proxy));
-        untronTransfers.grantRole(untronTransfers.UPGRADER_ROLE(), admin);
+        untronTransfers = UntronCore(address(proxy));
 
         vm.stopPrank();
     }
@@ -72,25 +69,7 @@ contract UntronTransfersTest is Test {
         assertEq(untronTransfers.swapper(), address(aggregationRouter));
 
         // Check role
-        assertEq(untronTransfers.hasRole(untronTransfers.UPGRADER_ROLE(), admin), true);
-    }
-
-    function test_withdrawLeftovers_WithdrawLeftovers() public {
-        vm.startPrank(admin);
-
-        untronTransfers.withdrawLeftovers();
-
-        // Since leftovers is 0 and is internal we can only check that there is no revert
-        // and that the USDT balance of the contract and the admin is 0 (ie nothing was transferred)
-        assertEq(usdt.balanceOf(address(untronTransfers)), 0);
-        assertEq(usdt.balanceOf(admin), 0);
-
-        vm.stopPrank();
-    }
-
-    function test_withdrawLeftovers_RevertIf_NoDefaultAdminRole() public {
-        vm.expectRevert();
-        untronTransfers.withdrawLeftovers();
+        assertEq(untronTransfers.owner(), admin);
     }
 
     function test_setUntronTransfersVariables_SetVariables() public {

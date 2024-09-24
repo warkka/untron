@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {ISP1Verifier} from "@sp1-contracts/ISP1Verifier.sol";
-import "../interfaces/core/IUntronZK.sol";
-import "./UntronState.sol";
+import "./interfaces/IUntronZK.sol";
 
 /// @title Module for ZK-related logic in Untron
 /// @author Ultrasound Labs
 /// @notice This contract wraps ZK proof verification in a UUPS-compatible manner.
-abstract contract UntronZK is IUntronZK, Initializable, UntronState {
+abstract contract UntronZK is IUntronZK, Initializable, OwnableUpgradeable {
     /// @notice Initializes the contract.
     /// @dev Under the hood, it just calls setZKVariables.
     function __UntronZK_init(address _verifier, bytes32 _vkey) internal onlyInitializing {
@@ -27,7 +26,7 @@ abstract contract UntronZK is IUntronZK, Initializable, UntronState {
     }
 
     /// @inheritdoc IUntronZK
-    function setZKVariables(address _verifier, bytes32 _vkey) external override onlyRole(UPGRADER_ROLE) {
+    function setZKVariables(address _verifier, bytes32 _vkey) external override onlyOwner {
         _setZKVariables(_verifier, _vkey);
     }
 

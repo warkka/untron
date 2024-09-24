@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
-// import "forge-std/console.sol";
+import "forge-std/console.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import "../interfaces/core/IUntronCore.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "./interfaces/IUntronCore.sol";
 import "./UntronTransfers.sol";
 import "./UntronTools.sol";
 import "./UntronFees.sol";
@@ -15,7 +14,7 @@ import "./UntronZK.sol";
 /// @author Ultrasound Labs
 /// @notice This contract contains the main logic of the Untron protocol.
 ///         It's designed to be fully upgradeable and modular, with each module being a separate contract.
-abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, UntronZK, IUntronCore {
+contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, UntronFees, UntronZK, IUntronCore {
     uint256 constant ORDER_TTL = 300; // 5 minutes
 
     /// @notice Initializes the core with the provided parameters.
@@ -31,7 +30,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
     /// @param _vkey The vkey of the ZK program.
     /// @dev This function grants the DEFAULT_ADMIN_ROLE and UPGRADER_ROLE to the msg.sender.
     ///      Upgrader role allows to upgrade the contract and dynamic values (see UntronState)
-    function __UntronCore_init(
+    function initialize(
         bytes32 _blockId,
         bytes32 _stateHash,
         uint256 _maxOrderSize,
@@ -42,10 +41,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         uint256 _feePoint,
         address _verifier,
         bytes32 _vkey
-    ) public onlyInitializing {
-        // initialize Access Control
-        __AccessControl_init();
-
+    ) public initializer {
         // initialize UntronTransfers
         __UntronTransfers_init(_spokePool, _usdt, _swapper);
 
@@ -55,9 +51,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         // initialize UntronZK
         __UntronZK_init(_verifier, _vkey);
 
-        // grant all necessary roles to msg.sender
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(UPGRADER_ROLE, msg.sender);
+        _transferOwnership(msg.sender);
 
         blockId = _blockId;
         stateHash = _stateHash;
@@ -70,6 +64,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
     bytes32 public latestExecutedAction;
     bytes32 public stateHash;
     uint256 public maxOrderSize;
+    uint256 public requiredCollateral;
 
     /// @inheritdoc IUntronCore
     function setCoreVariables(
@@ -77,23 +72,25 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         bytes32 _actionChainTip,
         bytes32 _latestExecutedAction,
         bytes32 _stateHash,
-        uint256 _maxOrderSize
-    ) external onlyRole(UPGRADER_ROLE) {
+        uint256 _maxOrderSize,
+        uint256 _requiredCollateral
+    ) external onlyOwner {
         blockId = _blockId;
         actionChainTip = _actionChainTip;
         latestExecutedAction = _latestExecutedAction;
         stateHash = _stateHash;
         maxOrderSize = _maxOrderSize;
+        requiredCollateral = _requiredCollateral;
     }
 
     /// @notice Mapping to store provider details.
     mapping(address => Provider) internal _providers;
     /// @notice Mapping to store whether a receiver is busy with an order.
-    mapping(address => bytes32) private _isReceiverBusy;
+    mapping(address => bytes32) internal _isReceiverBusy;
     /// @notice Mapping to store the owner (provider) of a receiver.
-    mapping(address => address) private _receiverOwners;
+    mapping(address => address) internal _receiverOwners;
     /// @notice Mapping to store order details by order ID.
-    mapping(bytes32 => Order) private _orders;
+    mapping(bytes32 => Order) internal _orders;
 
     /// @notice Returns the provider details for a given address
     /// @param provider The address of the provider
@@ -142,27 +139,13 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         emit ActionChainUpdated(_actionChainTip, tronTimestamp, receiver, minDeposit);
     }
 
-    /// @notice Creates an order with no checks.
-    /// @param creator The address of the creator
-    ///                who is authorized to change and stop this order
-    /// @param provider The address of the liquidity provider owning the Tron receiver address.
-    /// @param receiver The address of the Tron receiver address
-    ///                 that's used to perform a USDT transfer on Tron.
-    /// @param size The maximum size of the order in USDT L2.
-    /// @param rate The "USDT L2 per 1 USDT Tron" rate of the order.
-    /// @param transfer The transfer details.
-    ///                 They'll be used in the fulfill or closeOrders functions to send respective
-    ///                 USDT L2 to the order creator or convert them into whatever the order creator wants to receive
-    ///                 for their USDT Tron.
-    /// @dev This function must only be called in the createOrder function.
-    function _createOrder(
-        address creator,
-        address provider,
-        address receiver,
-        uint256 size,
-        uint256 rate,
-        Transfer calldata transfer
-    ) internal {
+    /// @inheritdoc IUntronCore
+    function createOrder(address provider, address receiver, uint256 size, uint256 rate, Transfer calldata transfer)
+        external
+    {
+        // collect collateral from the order creator
+        internalTransferFrom(msg.sender, requiredCollateral);
+
         // amount is the amount of USDT L2 that will be taken from the provider
         // based on the order size (which is in USDT Tron) and provider's rate
         (uint256 amount,) = conversion(size, rate, 0, false);
@@ -198,43 +181,19 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         _orders[orderId] = Order({
             parent: prevAction,
             timestamp: timestamp,
-            creator: creator,
+            creator: msg.sender,
             provider: provider,
             receiver: receiver,
             size: size,
             rate: rate,
             minDeposit: providerMinDeposit,
+            collateral: requiredCollateral,
             isFulfilled: false,
             transfer: transfer
         });
 
         // Emit OrderCreated event
-        emit OrderCreated(orderId, timestamp, creator, provider, receiver, size, rate, providerMinDeposit);
-    }
-
-    /// @notice Checks if the order can be created.
-    /// @param provider The address of the liquidity provider owning the Tron receiver address.
-    /// @param receiver The address of the Tron receiver address
-    ///                that's used to perform a USDT transfer on Tron.
-    /// @param size The maximum size of the order in USDT L2.
-    /// @param rate The "USDT L2 per 1 USDT Tron" rate of the order.
-    /// @param transfer The transfer details.
-    /// @return True if the order can be created, false otherwise.
-    /// @dev In Untron V1, this function implements rate limiting using trusted registrar.
-    ///      In the future, we plan to move Untron to a B2B model where each project will create
-    ///      orders for their business logic. This abstraction allows to conveniently move from
-    ///      rate limiting without changing the codebase.
-    function _canCreateOrder(address provider, address receiver, uint256 size, uint256 rate, Transfer memory transfer)
-        internal
-        virtual
-        returns (bool);
-
-    /// @inheritdoc IUntronCore
-    function createOrder(address provider, address receiver, uint256 size, uint256 rate, Transfer calldata transfer)
-        external
-    {
-        require(_canCreateOrder(provider, receiver, size, rate, transfer), "Cannot create order");
-        _createOrder(msg.sender, provider, receiver, size, rate, transfer);
+        emit OrderCreated(orderId, timestamp, msg.sender, provider, receiver, size, rate, providerMinDeposit);
     }
 
     /// @inheritdoc IUntronCore
@@ -261,6 +220,9 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
 
         // return the liquidity back to the provider
         _providers[_orders[orderId].provider].liquidity += _orders[orderId].size;
+
+        // refund the collateral to the order creator
+        internalTransfer(msg.sender, _orders[orderId].collateral);
 
         // delete the order because it won't be fulfilled/closed
         // (stopOrder assumes that the order creator sent nothing)
@@ -332,6 +294,9 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
             // perform the transfer
             smartTransfer(order.transfer, amount);
 
+            // refund the collateral to the order creator
+            internalTransfer(order.creator, order.collateral);
+
             // update action chain to free the receiver address
             _freeReceiver(_receivers[i]);
 
@@ -348,6 +313,8 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
             _orders[activeOrderId].transfer.doSwap = false;
             // set the fulfilled order as isFullfilled true
             _orders[activeOrderId].isFulfilled = true;
+            // set the collateral to 0 to prevent refunding it twice or slashing the creator wrongfully
+            _orders[activeOrderId].collateral = 0;
 
             // Emit OrderFulfilled event
             emit OrderFulfilled(activeOrderId, msg.sender);
@@ -362,32 +329,10 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         }
     }
 
-    /// @notice The timestamp of the last relayer activity.
-    /// @dev Used to make closing orders permissionless in case all relayers are down for more than 12 hours.
-    uint256 public lastRelayerActivity;
-
-    /// @notice The role for the relayers.
-    /// @dev Relayer is a role that is responsible for closing the orders.
-    ///      They generate and publish ZK proofs for Tron blockchain and its contents, in exchange for a fee (in percents; see relayerFee in UntronState).
-    ///      If all relayers are down for more than 12 hours, relaying becomes permissionless (see lastRelayerActivity).
-    bytes32 public constant RELAYER_ROLE = keccak256("RELAYER_ROLE");
-
     /// @notice Closes the orders and sends the funds to the providers or order creators, if not fulfilled.
     /// @param proof The ZK proof.
     /// @param publicValues The public values for the proof and order closure.
     function closeOrders(bytes calldata proof, bytes calldata publicValues) external {
-        bool isRelayer = hasRole(RELAYER_ROLE, msg.sender);
-        // Check if the sender has the relayer role or if all relayers are inactive
-        require(
-            isRelayer || (block.timestamp - lastRelayerActivity > 12 hours),
-            "Caller is not a relayer and relayers are not inactive"
-        );
-
-        // Update the last active timestamp for relayers if the caller is a relayer
-        if (isRelayer) {
-            lastRelayerActivity = block.timestamp;
-        }
-
         // verify the ZK proof with the public values
         // verifying logic is defined in the UntronZK contract.
         // currently it wraps SP1 zkVM verifier.
@@ -431,7 +376,7 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
         latestExecutedAction = newExecutedAction;
         stateHash = newStateHash;
 
-        // this variable is used to calculate the total fee that the relayer will receive
+        // this variable is used to calculate the total fee that the protocol owner (DAO) will receiver for relayer services
         uint256 totalFee;
 
         // iterate over the closed orders
@@ -445,10 +390,14 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
             uint256 minInflow =
                 closedOrders[i].inflow < _orders[orderId].size ? closedOrders[i].inflow : _orders[orderId].size;
 
-            // calculate the amount and fee the order creator/fulfiller will receive
+            // calculate the amount the order creator/fulfiller will receive and fee for the protocol
             (uint256 amount, uint256 fee) = conversion(minInflow, _orders[orderId].rate, 0, true);
             // add the fee to the total fee
             totalFee += fee;
+
+            console.log("minInflow", minInflow);
+            console.log("amount", amount);
+            console.log("fee", fee);
 
             // remove fixed output flag to make the transfer unrevertable
             // (if the order creator hadn't changed the transfer details by that time it's their fault tbh)
@@ -456,6 +405,12 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
 
             // perform the transfer
             smartTransfer(_orders[orderId].transfer, amount);
+
+            // if the order creator didn't send anything, slash the collateral by sending it to the protocol owner
+            // otherwise refund the collateral to the order creator
+            // NOTE: at fulfill() and stopOrder() we set the collateral to 0 so those actions won't lead
+            // to slashing even if the order creator sent nothing
+            internalTransfer(minInflow == 0 ? owner() : _orders[orderId].creator, _orders[orderId].collateral);
 
             if (!_orders[orderId].isFulfilled) {
                 // if the order is not fulfilled, update the action chain to free the receiver address
@@ -469,12 +424,15 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
                 conversion(_orders[orderId].size - minInflow, _orders[orderId].rate, 0, false);
             _providers[_orders[orderId].provider].liquidity += remainingLiquidity;
 
+            // delete the order from storage
+            delete _orders[orderId];
+
             // emit the OrderClosed event
             emit OrderClosed(orderId, msg.sender);
         }
 
-        // pay the relayer for the service
-        internalTransfer(msg.sender, totalFee);
+        // transfer the fee to the protocol
+        internalTransfer(owner(), totalFee);
 
         // emit the RelayUpdated event
         emit RelayUpdated(msg.sender, blockId, latestExecutedAction, stateHash);
@@ -552,21 +510,9 @@ abstract contract UntronCore is Initializable, UntronTransfers, UntronFees, Untr
     /// @param receiver The address of the receiver to be freed
     /// @dev does not implement checks if the closure is legitimate; must be implemented by the caller function
     function _freeReceiver(address receiver) internal {
+        // set the receiver as not busy
         _isReceiverBusy[receiver] = bytes32(0);
+        // update the action chain with closure action
         updateActionChain(receiver, 0);
-    }
-
-    /// @inheritdoc IUntronCore
-    function freeReceivers(address[] calldata receivers) external {
-        // iterate over the receivers
-        for (uint256 i = 0; i < receivers.length; i++) {
-            // if the receiver is busy with an expired order, free it
-            if (
-                _isReceiverBusy[receivers[i]] != bytes32(0)
-                    && _orders[_isReceiverBusy[receivers[i]]].timestamp + ORDER_TTL < unixToTron(block.timestamp)
-            ) {
-                _freeReceiver(receivers[i]);
-            }
-        }
     }
 }
