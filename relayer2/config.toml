@@ -1,0 +1,12 @@
+[ethereum]
+rpc_url = "https://mainnet.infura.io/v3/YOUR-PROJECT-ID"
+private_key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+core_address = "0x1234567890123456789012345678901234567890"
+
+[tron]
+rpc_url = "https://api.trongrid.io/jsonrpc"
+
+[buffer]
+max_blocks = 100
+max_actions = 1000
+min_interval = 600
