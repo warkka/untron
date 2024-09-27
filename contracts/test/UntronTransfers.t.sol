@@ -52,6 +52,7 @@ contract UntronTransfersTest is Test {
             address(aggregationRouter),
             100, // relayerFee
             10000, // feePoint
+            address(420), // trustedRelayer
             address(sp1Verifier),
             bytes32(0) // vkey
         );

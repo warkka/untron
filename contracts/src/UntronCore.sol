@@ -26,6 +26,7 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
     /// @param _swapper The address of the contract implementing swap logic.
     /// @param _relayerFee The fee charged by the relayer, in percents.
     /// @param _feePoint The basic fee point used to calculate the fee per transfer.
+    /// @param _trustedRelayer The address of the trusted relayer (used in case of mock verification)
     /// @param _verifier The address of the ZK proof verifier.
     /// @param _vkey The vkey of the ZK program.
     /// @dev This function grants the DEFAULT_ADMIN_ROLE and UPGRADER_ROLE to the msg.sender.
@@ -39,6 +40,7 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
         address _swapper,
         uint256 _relayerFee,
         uint256 _feePoint,
+        address _trustedRelayer,
         address _verifier,
         bytes32 _vkey
     ) public initializer {
@@ -49,7 +51,7 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
         __UntronFees_init(_relayerFee, _feePoint);
 
         // initialize UntronZK
-        __UntronZK_init(_verifier, _vkey);
+        __UntronZK_init(_trustedRelayer, _verifier, _vkey);
 
         _transferOwnership(msg.sender);
 

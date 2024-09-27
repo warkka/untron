@@ -52,6 +52,7 @@ contract UntronZKTest is Test {
             address(aggregationRouter),
             100, // relayerFee
             10000, // feePoint
+            address(420), // trustedRelayer
             address(sp1Verifier),
             bytes32(0) // vkey
         );
@@ -71,10 +72,11 @@ contract UntronZKTest is Test {
     function test_setUntronZKVariables_SetVariables() public {
         vm.startPrank(admin);
 
+        address trustedRelayer = address(420);
         address verifier = address(sp1Verifier);
         bytes32 vkey = bytes32(uint256(1));
 
-        untronZK.setZKVariables(verifier, vkey);
+        untronZK.setZKVariables(trustedRelayer, verifier, vkey);
 
         assertEq(untronZK.verifier(), verifier);
         assertEq(untronZK.vkey(), vkey);
@@ -83,10 +85,11 @@ contract UntronZKTest is Test {
     }
 
     function test_setUntronZKVariables_RevertIf_NotUpgraderRole() public {
+        address trustedRelayer = address(420);
         address verifier = address(sp1Verifier);
         bytes32 vkey = bytes32(uint256(1));
 
         vm.expectRevert();
-        untronZK.setZKVariables(verifier, vkey);
+        untronZK.setZKVariables(trustedRelayer, verifier, vkey);
     }
 }

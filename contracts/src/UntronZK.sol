@@ -12,22 +12,24 @@ import "./interfaces/IUntronZK.sol";
 abstract contract UntronZK is IUntronZK, Initializable, OwnableUpgradeable {
     /// @notice Initializes the contract.
     /// @dev Under the hood, it just calls setZKVariables.
-    function __UntronZK_init(address _verifier, bytes32 _vkey) internal onlyInitializing {
-        _setZKVariables(_verifier, _vkey);
+    function __UntronZK_init(address _trustedRelayer, address _verifier, bytes32 _vkey) internal onlyInitializing {
+        _setZKVariables(_trustedRelayer, _verifier, _vkey);
     }
 
     // UntronZK variables
+    address public trustedRelayer;
     address public verifier;
     bytes32 public vkey;
 
-    function _setZKVariables(address _verifier, bytes32 _vkey) internal {
+    function _setZKVariables(address _trustedRelayer, address _verifier, bytes32 _vkey) internal {
+        trustedRelayer = _trustedRelayer;
         verifier = _verifier;
         vkey = _vkey;
     }
 
     /// @inheritdoc IUntronZK
-    function setZKVariables(address _verifier, bytes32 _vkey) external override onlyOwner {
-        _setZKVariables(_verifier, _vkey);
+    function setZKVariables(address _trustedRelayer, address _verifier, bytes32 _vkey) external override onlyOwner {
+        _setZKVariables(_trustedRelayer, _verifier, _vkey);
     }
 
     /// @notice verify the ZK proof
@@ -35,6 +37,11 @@ abstract contract UntronZK is IUntronZK, Initializable, OwnableUpgradeable {
     /// @param publicValues The public values to verify the proof with.
     /// @dev reverts in case the proof is invalid. Currently wraps SP1 zkVM.
     function verifyProof(bytes memory proof, bytes memory publicValues) internal view {
+        if (vkey == bytes32(0)) {
+            require(msg.sender == trustedRelayer, "Only trusted relayer can call this function");
+            return;
+        }
+
         ISP1Verifier(verifier).verifyProof(vkey, publicValues, proof);
     }
 }
