@@ -503,7 +503,7 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
         }
 
         // Emit ProviderUpdated event
-        emit ProviderUpdated(msg.sender, liquidity, rate, minOrderSize, minDeposit);
+        emit ProviderUpdated(msg.sender, liquidity, rate, minOrderSize, minDeposit, receivers);
     }
 
     /// @notice Frees the receiver by setting it as not busy and updating the action chain with closure action.
@@ -514,5 +514,7 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
         _isReceiverBusy[receiver] = bytes32(0);
         // update the action chain with closure action
         updateActionChain(receiver, 0, 0);
+        // Emit ReceiverFreed event
+        emit ReceiverFreed(_receiverOwners[receiver], receiver);
     }
 }

@@ -88,8 +88,14 @@ interface IUntronCore is IUntronTransfers, IUntronFees, IUntronZK {
     event OrderClosed(bytes32 indexed orderId, address relayer);
     event RelayUpdated(address relayer, bytes32 newBlockId, bytes32 newLatestClosedOrder, bytes32 newStateHash);
     event ProviderUpdated(
-        address indexed provider, uint256 liquidity, uint256 rate, uint256 minOrderSize, uint256 minDeposit
+        address indexed provider, 
+        uint256 liquidity, 
+        uint256 rate, 
+        uint256 minOrderSize, 
+        uint256 minDeposit, 
+        address[] receivers
     );
+    event ReceiverFreed(address provider, address receiver);
 
     function providers(address provider) external view returns (Provider memory);
     function isReceiverBusy(address receiver) external view returns (bytes32);
