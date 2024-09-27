@@ -26,11 +26,14 @@ impl Prover {
         }
     }
 
-    pub async fn generate_proof(&self, stdin: SP1Stdin) -> Result<Vec<u8>, Box<dyn Error>> {
+    pub async fn generate_proof(
+        &self,
+        stdin: SP1Stdin,
+    ) -> Result<(Vec<u8>, Vec<u8>), Box<dyn Error>> {
         let vkey = self.zksync_client.vkey().await;
         if vkey == [0; 32] {
-            self.prover.execute(self.elf, stdin.clone()).run()?;
-            return Ok(vec![]);
+            let (public_values, _) = self.prover.execute(self.elf, stdin.clone()).run()?;
+            return Ok((vec![], public_values.to_vec()));
         }
 
         if vkey != self.vk.hash_bytes() {
@@ -43,6 +46,6 @@ impl Prover {
         // Generates the ZK proof
         let result = self.prover.prove(&self.pk, stdin).groth16().run()?;
         self.prover.verify(&result, &self.vk)?;
-        Ok(result.bytes())
+        Ok((result.bytes(), result.public_values.to_vec()))
     }
 }

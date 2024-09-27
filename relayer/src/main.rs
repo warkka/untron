@@ -1,6 +1,5 @@
 use crate::config::Config;
 use tokio::fs;
-use tracing_subscriber;
 
 mod config;
 mod fulfiller;
@@ -19,7 +18,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Config: {:?}", config);
 
-    let mut relayer = relayer::UntronRelayer::new(config).await?;
+    let relayer = relayer::UntronRelayer::new(config).await?;
     tracing::info!("Untron relayer initialized");
 
     relayer.run().await?;

@@ -12,6 +12,7 @@ pub struct ZkSyncConfig {
     pub rpc: String,
     pub private_key: String,
     pub core_address: String,
+    pub usdt_address: String,
     pub fulfill: bool,
 }
 
@@ -24,5 +25,4 @@ pub struct TronConfig {
 pub struct RelayConfig {
     pub proof_interval: u64,
     pub min_orders_to_relay: usize,
-    pub mock: bool,
 }

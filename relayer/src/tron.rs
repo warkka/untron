@@ -1,6 +1,6 @@
 mod proto;
 
-use proto::{wallet_client::WalletClient, BlockExtention, NumberMessage};
+use proto::{wallet_client::WalletClient, BlockExtention, EmptyMessage, NumberMessage};
 use std::error::Error;
 use tonic::transport::Channel;
 use tonic::Request;
@@ -23,6 +23,13 @@ impl TronClient {
             num: block_number as i64,
         });
         let response = self.client.get_block_by_num2(request).await?;
+        let block = response.into_inner();
+        Ok(block)
+    }
+
+    pub async fn get_now_block2(&mut self) -> Result<BlockExtention, Box<dyn Error>> {
+        let request = Request::new(EmptyMessage {});
+        let response = self.client.get_now_block2(request).await?;
         let block = response.into_inner();
         Ok(block)
     }
