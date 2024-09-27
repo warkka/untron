@@ -29,6 +29,7 @@ pub struct Action {
     pub timestamp: u64,
     pub address: [u8; 20],
     pub min_deposit: u64,
+    pub size: u64,
 }
 // sol! can't work with Serialize and Deserialize
 impl Action {
@@ -41,6 +42,8 @@ impl Action {
         encoded.extend_from_slice(&self.address);
         encoded.extend_from_slice(&[0u8; 24]);
         encoded.extend_from_slice(&self.min_deposit.to_be_bytes());
+        encoded.extend_from_slice(&[0u8; 24]);
+        encoded.extend_from_slice(&self.size.to_be_bytes());
         encoded
     }
 }
@@ -57,6 +60,8 @@ pub struct OrderState {
     // minimum amount of USDT transfer for it to be accepted
     // (e.g. if it's 1 USDT, the program won't count 0.5 USDT transfers to the address above)
     pub min_deposit: u64,
+    // how much USDT must be deposited for the order to be closed
+    pub size: u64,
 }
 
 // State is the state of the Untron program
@@ -225,6 +230,7 @@ pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], u64)> {
                                     timestamp: action.timestamp,
                                     inflow: 0,
                                     min_deposit: action.min_deposit,
+                                    size: action.size,
                                 },
                             );
                             // Mark the address as active with the new action_id
@@ -257,7 +263,13 @@ pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], u64)> {
                     };
 
                     // if they are, we add the transfer value to their order's inflow
-                    state.orders.get_mut(order_id).unwrap().inflow += transfer.value;
+                    let order = state.orders.get_mut(order_id).unwrap();
+                    order.inflow += transfer.value;
+                    // if the inflow is greater than or equal to the size, the order is closed
+                    if order.inflow >= order.size {
+                        closed_orders.push((*order_id, order.inflow));
+                        state.orders.remove(order_id);
+                    }
                 }
                 // if it's not a USDT transfer, we check if it's a vote transaction
                 None => {

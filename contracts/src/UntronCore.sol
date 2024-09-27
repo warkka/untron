@@ -125,18 +125,21 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
     /// @param minDeposit The minimum deposit amount.
     /// @return _actionChainTip The new action chain tip.
     /// @dev must only be used in _createOrder and _freeReceiver
-    function updateActionChain(address receiver, uint256 minDeposit) internal returns (bytes32 _actionChainTip) {
+    function updateActionChain(address receiver, uint256 minDeposit, uint256 size)
+        internal
+        returns (bytes32 _actionChainTip)
+    {
         // action chain is a hash chain of the order-related, onchain-initiated actions.
-        // Action consists of timestamp in Tron format, Tron receiver address, and minimum deposit amount.
+        // Action consists of timestamp in Tron format, Tron receiver address, minimum deposit amount, and order size.
         // It's used to start and stop orders. If the order is stopped, minimum deposit amount is not used.
         // We're utilizing Tron timestamp to enforce the ZK program to follow all Untron actions respective to the Tron blockchain.
-        // ABI: (bytes32, uint256, address, uint256)
+        // ABI: (bytes32, uint256, address, uint256, uint256)
         uint256 tronTimestamp = unixToTron(block.timestamp);
-        _actionChainTip = sha256(abi.encode(actionChainTip, tronTimestamp, receiver, minDeposit));
+        _actionChainTip = sha256(abi.encode(actionChainTip, tronTimestamp, receiver, minDeposit, size));
         // actionChainTip stores the latest action (aka order id), that is, the tip of the action chain.
         actionChainTip = _actionChainTip;
 
-        emit ActionChainUpdated(_actionChainTip, tronTimestamp, receiver, minDeposit);
+        emit ActionChainUpdated(_actionChainTip, tronTimestamp, receiver, minDeposit, size);
     }
 
     /// @inheritdoc IUntronCore
@@ -173,7 +176,7 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
         bytes32 prevAction = latestExecutedAction;
         // create the order ID and update the action chain.
         // order ID is the tip of the action chain when the order was created.
-        bytes32 orderId = updateActionChain(receiver, providerMinDeposit);
+        bytes32 orderId = updateActionChain(receiver, providerMinDeposit, size);
         // set the receiver as busy to prevent double orders
         _isReceiverBusy[receiver] = orderId;
         uint256 timestamp = unixToTron(block.timestamp);
@@ -509,7 +512,7 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
         // set the receiver as not busy
         _isReceiverBusy[receiver] = bytes32(0);
         // update the action chain with closure action
-        updateActionChain(receiver, 0);
+        updateActionChain(receiver, 0, 0);
         // Emit ReceiverFreed event
         emit ReceiverFreed(_receiverOwners[receiver], receiver);
     }
