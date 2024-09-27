@@ -138,10 +138,10 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
         // ABI: (bytes32, uint256, address, uint256, uint256)
         uint256 tronTimestamp = unixToTron(block.timestamp);
         _actionChainTip = sha256(abi.encode(actionChainTip, tronTimestamp, receiver, minDeposit, size));
+        emit ActionChainUpdated(actionChainTip, tronTimestamp, receiver, minDeposit, size);
+
         // actionChainTip stores the latest action (aka order id), that is, the tip of the action chain.
         actionChainTip = _actionChainTip;
-
-        emit ActionChainUpdated(_actionChainTip, tronTimestamp, receiver, minDeposit, size);
     }
 
     /// @inheritdoc IUntronCore
