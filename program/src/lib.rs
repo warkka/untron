@@ -101,7 +101,7 @@ pub struct Order {
 
 // RawBlock is the data of a block in the Tron blockchain.
 // It's needed for the program to check the block contents.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct RawBlock {
     // raw data of the block. contains its timestamp, tx root, etc.
     // it's encoded in protobuf, but we use our own makeshift-but-efficient deserialization (see protobuf.rs)
