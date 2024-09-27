@@ -44,7 +44,11 @@ pub fn main() {
     let old_action_chain = state.action_chain;
 
     // perform execution over the state through the state transition function (see lib.rs for details)
-    let closed_orders = stf(&mut state, execution);
+    // and format closed_orders as (order_id, amount)
+    let closed_orders: Vec<([u8; 32], u64)> = stf(&mut state, execution)
+        .into_iter()
+        .map(|(order_id, order_state)| (order_id, order_state.inflow))
+        .collect();
 
     // compute the new state hash
     let new_state_hash = crypto::hash(&bincode::serialize(&state).unwrap());

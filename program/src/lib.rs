@@ -135,7 +135,7 @@ pub fn block_id_to_number(block_id: [u8; 32]) -> u32 {
 // stf is the state transition function for the Untron program.
 // it takes the current state and an execution
 // and returns the new state and the closed orders, then passed to the smart contract.
-pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], u64)> {
+pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], OrderState)> {
     // iterate over all new order actions to form the new action chain and add them to the pending actions
     for action in execution.actions {
         // hash the chained order and insert it into the state
@@ -213,13 +213,13 @@ pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], u64)> {
                     state.pending_actions.remove(0);
 
                     match active_addresses.remove(&action.address) {
-                        Some(action_id) => {
+                        Some(old_action_id) => {
                             // If the address is already active, close the existing order
-                            // Add the closed order to the list with its action_id and inflow amount
-                            closed_orders
-                                .push((action_id, state.orders.get(&action_id).unwrap().inflow));
-                            // Remove the closed order from the state
-                            state.orders.remove(&action_id);
+                            if let Some(order) = state.orders.remove(&old_action_id) {
+                                // Add the closed order to the list
+                                closed_orders.push((old_action_id, order));
+                            }
+                            // else is unreachable
                         }
                         None => {
                             // If the address is not active, create a new order
@@ -267,8 +267,10 @@ pub fn stf(state: &mut State, execution: Execution) -> Vec<([u8; 32], u64)> {
                     order.inflow += transfer.value;
                     // if the inflow is greater than or equal to the size, the order is closed
                     if order.inflow >= order.size {
-                        closed_orders.push((*order_id, order.inflow));
-                        state.orders.remove(order_id);
+                        if let Some(order) = state.orders.remove(order_id) {
+                            closed_orders.push((*order_id, order));
+                        }
+                        // else is unreachable
                     }
                 }
                 // if it's not a USDT transfer, we check if it's a vote transaction
