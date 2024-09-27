@@ -73,19 +73,19 @@ contract UntronCoreTest is Test {
         return orderId;
     }
 
-    function fulfillOrder(address _fulfiller, address _receiver) public {
+    function fulfillOrder(address _fulfiller, bytes32 _orderId) public {
         // Fulfill order
         vm.startPrank(_fulfiller);
 
-        address[] memory receivers = new address[](1);
-        receivers[0] = _receiver;
+        bytes32[] memory orderIds = new bytes32[](1);
+        orderIds[0] = _orderId;
 
-        (uint256 expense,) = untron.calculateFulfillerTotal(receivers);
+        (uint256 expense,) = untron.calculateFulfillerTotal(orderIds);
 
         usdt.mint(_fulfiller, expense);
         usdt.approve(address(untron), expense);
 
-        untron.fulfill(receivers, expense);
+        untron.fulfill(orderIds, expense);
         vm.stopPrank();
     }
 
@@ -122,7 +122,7 @@ contract UntronCoreTest is Test {
             10000, // feePoint
             address(420), // trustedRelayer
             address(sp1Verifier),
-            bytes32(0) // vkey
+            bytes32(uint256(1)) // vkey
         );
 
         // Deploy the proxy, pointing to the implementation and passing the init data
@@ -136,7 +136,7 @@ contract UntronCoreTest is Test {
         assertEq(untron.spokePool(), address(spokePool));
         assertEq(untron.usdt(), address(usdt));
         assertEq(untron.verifier(), address(sp1Verifier));
-        assertEq(untron.vkey(), bytes32(0));
+        assertEq(untron.vkey(), bytes32(uint256(1)));
         assertEq(untron.relayerFee(), 100);
         assertEq(untron.feePoint(), 10000);
         assertEq(untron.maxOrderSize(), 1000e6);
@@ -600,15 +600,15 @@ contract UntronCoreTest is Test {
     function test_calculateFulfillerTotal_CalculatesFulfillerTotal() public {
         // Given
         // Set up provider and create order
-        createOrder(user, provider, receiver);
+        bytes32 orderId = createOrder(user, provider, receiver);
 
         // Fulfill order
         vm.startPrank(fulfiller);
 
-        address[] memory receivers = new address[](1);
-        receivers[0] = receiver;
+        bytes32[] memory orderIds = new bytes32[](1);
+        orderIds[0] = orderId;
 
-        (uint256 expense, uint256 fee) = untron.calculateFulfillerTotal(receivers);
+        (uint256 expense, uint256 fee) = untron.calculateFulfillerTotal(orderIds);
 
         // Then
         uint256 relayerFee = 0.05e6; // (0.01% of 500e6)
@@ -628,15 +628,15 @@ contract UntronCoreTest is Test {
         // Fulfill order
         vm.startPrank(fulfiller);
 
-        address[] memory receivers = new address[](1);
-        receivers[0] = receiver;
+        bytes32[] memory orderIds = new bytes32[](1);
+        orderIds[0] = orderId;
 
-        (uint256 expense,) = untron.calculateFulfillerTotal(receivers);
+        (uint256 expense,) = untron.calculateFulfillerTotal(orderIds);
 
         usdt.mint(fulfiller, expense);
         usdt.approve(address(untron), expense);
 
-        untron.fulfill(receivers, expense);
+        untron.fulfill(orderIds, expense);
         vm.stopPrank();
 
         // Check order status
@@ -664,15 +664,15 @@ contract UntronCoreTest is Test {
         // Fulfill order
         vm.startPrank(fulfiller);
 
-        address[] memory receivers = new address[](1);
-        receivers[0] = receiver;
+        bytes32[] memory orderIds = new bytes32[](1);
+        orderIds[0] = orderId;
 
-        (uint256 expense,) = untron.calculateFulfillerTotal(receivers);
+        (uint256 expense,) = untron.calculateFulfillerTotal(orderIds);
 
         usdt.mint(fulfiller, expense + 1);
         usdt.approve(address(untron), expense + 1);
 
-        untron.fulfill(receivers, expense + 1);
+        untron.fulfill(orderIds, expense + 1);
         vm.stopPrank();
 
         // Check order status
@@ -693,15 +693,15 @@ contract UntronCoreTest is Test {
     function test_fulfill_RevertIf_InsufficientFunds() public {
         // Given
         // Set up provider and create order
-        createOrder(user, provider, receiver);
+        bytes32 orderId = createOrder(user, provider, receiver);
 
         // Fulfill order
         vm.startPrank(fulfiller);
 
-        address[] memory receivers = new address[](1);
-        receivers[0] = receiver;
+        bytes32[] memory orderIds = new bytes32[](1);
+        orderIds[0] = orderId;
 
-        (uint256 expense,) = untron.calculateFulfillerTotal(receivers);
+        (uint256 expense,) = untron.calculateFulfillerTotal(orderIds);
 
         usdt.mint(fulfiller, expense - 1);
         usdt.approve(address(untron), expense - 1);
@@ -709,7 +709,7 @@ contract UntronCoreTest is Test {
         // When
         // Try to fulfill order with insufficient funds
         vm.expectRevert();
-        untron.fulfill(receivers, expense);
+        untron.fulfill(orderIds, expense);
 
         // Then
         vm.stopPrank();
@@ -718,15 +718,15 @@ contract UntronCoreTest is Test {
     function test_fulfill_RevertIf_ExpectedTotalLessThanSentTotal() public {
         // Given
         // Set up provider and create order
-        createOrder(user, provider, receiver);
+        bytes32 orderId = createOrder(user, provider, receiver);
 
         // Fulfill order
         vm.startPrank(fulfiller);
 
-        address[] memory receivers = new address[](1);
-        receivers[0] = receiver;
+        bytes32[] memory orderIds = new bytes32[](1);
+        orderIds[0] = orderId;
 
-        (uint256 expense,) = untron.calculateFulfillerTotal(receivers);
+        (uint256 expense,) = untron.calculateFulfillerTotal(orderIds);
 
         usdt.mint(fulfiller, expense);
         usdt.approve(address(untron), expense);
@@ -734,7 +734,7 @@ contract UntronCoreTest is Test {
         // When
         // Try to fulfill order with more funds than expected
         vm.expectRevert();
-        untron.fulfill(receivers, expense + 1);
+        untron.fulfill(orderIds, expense + 1);
 
         // Then
         vm.stopPrank();
@@ -746,7 +746,7 @@ contract UntronCoreTest is Test {
     {
         // Set up provider, create order, and fulfill order
         orderId = createOrder(user, provider, receiver);
-        fulfillOrder(fulfiller, receiver);
+        fulfillOrder(fulfiller, orderId);
         uint256 untronPreBalance = usdt.balanceOf(address(untron));
 
         IUntronCore.Order memory order = untron.orders(orderId);
@@ -792,7 +792,7 @@ contract UntronCoreTest is Test {
         // Given
         // Set up provider, create order, and fulfill order
         bytes32 orderId = createOrder(user, provider, receiver);
-        fulfillOrder(fulfiller, receiver);
+        fulfillOrder(fulfiller, orderId);
 
         // When
         vm.startPrank(admin);
@@ -824,7 +824,7 @@ contract UntronCoreTest is Test {
         // Given
         // Set up provider, create order, and fulfill order
         bytes32 orderId = createOrder(user, provider, receiver);
-        fulfillOrder(fulfiller, receiver);
+        fulfillOrder(fulfiller, orderId);
 
         // When
         vm.startPrank(admin);
@@ -863,7 +863,7 @@ contract UntronCoreTest is Test {
         address preFulfiller = address(105);
 
         bytes32 preOrderId = createOrder(preUser, preProvider, preReceiver);
-        fulfillOrder(preFulfiller, preReceiver);
+        fulfillOrder(preFulfiller, preOrderId);
 
         IUntronCore.Inflow[] memory preClosedOrders = new IUntronCore.Inflow[](1);
         preClosedOrders[0] = IUntronCore.Inflow({order: preOrderId, inflow: 500e6});
@@ -886,7 +886,7 @@ contract UntronCoreTest is Test {
 
         // Set up provider, create order, and fulfill order
         bytes32 orderId = createOrder(user, provider, receiver);
-        fulfillOrder(fulfiller, receiver);
+        fulfillOrder(fulfiller, orderId);
 
         // When
         vm.startPrank(admin);
@@ -924,7 +924,7 @@ contract UntronCoreTest is Test {
         address preFulfiller = address(105);
 
         bytes32 preOrderId = createOrder(preUser, preProvider, preReceiver);
-        fulfillOrder(preFulfiller, preReceiver);
+        fulfillOrder(preFulfiller, preOrderId);
 
         IUntronCore.Inflow[] memory preClosedOrders = new IUntronCore.Inflow[](1);
         preClosedOrders[0] = IUntronCore.Inflow({order: preOrderId, inflow: 500e6});
@@ -947,7 +947,7 @@ contract UntronCoreTest is Test {
 
         // Set up provider, create order, and fulfill order
         bytes32 orderId = createOrder(user, provider, receiver);
-        fulfillOrder(fulfiller, receiver);
+        fulfillOrder(fulfiller, orderId);
 
         // When
         vm.startPrank(admin);

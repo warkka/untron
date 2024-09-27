@@ -259,14 +259,14 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
     }
 
     /// @inheritdoc IUntronCore
-    function calculateFulfillerTotal(address[] calldata _receivers)
+    function calculateFulfillerTotal(bytes32[] calldata _orderIds)
         external
         view
         returns (uint256 totalExpense, uint256 totalProfit)
     {
-        // iterate over the receivers
-        for (uint256 i = 0; i < _receivers.length; i++) {
-            Order memory order = _getActiveOrderByReceiver(_receivers[i]);
+        // iterate over the order IDs
+        for (uint256 i = 0; i < _orderIds.length; i++) {
+            Order memory order = _orders[_orderIds[i]];
             (uint256 amount, uint256 fulfillerFee) = _getAmountAndFee(order);
 
             // add the amount to the total expense and the fee to the total profit
@@ -276,20 +276,19 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
     }
 
     /// @inheritdoc IUntronCore
-    function fulfill(address[] calldata _receivers, uint256 total) external {
+    function fulfill(bytes32[] calldata _orderIds, uint256 total) external {
         // take the declared amount of USDT L2 from the fulfiller
         internalTransferFrom(msg.sender, total);
         // this variable will be used to calculate how much the contract sent to the order creators.
         // this number must be equal to "total" to prevent the fulfiller from stealing the funds in the contract.
         uint256 expectedTotal;
 
-        // iterate over the receivers
-        for (uint256 i = 0; i < _receivers.length; i++) {
-            // get the order ID
-            bytes32 activeOrderId = _isReceiverBusy[_receivers[i]];
+        // iterate over the order IDs
+        for (uint256 i = 0; i < _orderIds.length; i++) {
+            // get the order
+            Order memory order = _orders[_orderIds[i]];
 
-            // get the active order ID for the receiver
-            Order memory order = _orders[activeOrderId];
+            require(order.isFulfilled == false, "Order already fulfilled");
 
             (uint256 amount,) = _getAmountAndFee(order);
 
@@ -303,26 +302,26 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
             internalTransfer(usdt, order.creator, order.collateral);
 
             // update action chain to free the receiver address
-            _freeReceiver(_receivers[i]);
+            _freeReceiver(order.receiver);
 
             // update the order details
 
             // to prevent from modifying the order after it's fulfilled
-            _orders[activeOrderId].creator = msg.sender;
+            _orders[_orderIds[i]].creator = msg.sender;
             // to make fulfiller receive provider's USDT L2 after the ZK proof is published
-            _orders[activeOrderId].transfer.recipient = msg.sender;
+            _orders[_orderIds[i]].transfer.recipient = msg.sender;
             // fulfiller will always receive provider's USDT L2 on the contract host chain (ZKsync Era),
             // as opposed to order creator's transfer that could be on any chain
-            _orders[activeOrderId].transfer.chainId = chainId();
+            _orders[_orderIds[i]].transfer.chainId = chainId();
             // fulfilled orders don't need swaps, because the fulfillers will always receive USDT L2 on the host chain.
-            _orders[activeOrderId].transfer.doSwap = false;
+            _orders[_orderIds[i]].transfer.doSwap = false;
             // set the fulfilled order as isFullfilled true
-            _orders[activeOrderId].isFulfilled = true;
+            _orders[_orderIds[i]].isFulfilled = true;
             // set the collateral to 0 to prevent refunding it twice or slashing the creator wrongfully
-            _orders[activeOrderId].collateral = 0;
+            _orders[_orderIds[i]].collateral = 0;
 
             // Emit OrderFulfilled event
-            emit OrderFulfilled(activeOrderId, msg.sender);
+            emit OrderFulfilled(_orderIds[i], msg.sender);
         }
 
         // check that the total amount of USDT L2 sent is less or equal to the declared amount

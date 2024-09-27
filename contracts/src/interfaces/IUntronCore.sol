@@ -145,17 +145,17 @@ interface IUntronCore is IUntronTransfers, IUntronFees, IUntronZK {
     ///      and won't be fulfilled.
     function stopOrder(bytes32 orderId) external;
 
-    /// @notice Helper function that calculates the fulfiller's total expense and income given the receivers.
-    /// @param _receivers The addresses of the receivers.
+    /// @notice Helper function that calculates the fulfiller's total expense and income given the order IDs.
+    /// @param _orderIds The IDs of the orders.
     /// @return totalExpense The total expense in USDT L2.
     /// @return totalProfit The total profit in USDT L2.
-    function calculateFulfillerTotal(address[] calldata _receivers)
+    function calculateFulfillerTotal(bytes32[] calldata _orderIds)
         external
         view
         returns (uint256 totalExpense, uint256 totalProfit);
 
     /// @notice Fulfills the orders by sending their ask in advance.
-    /// @param _receivers The addresses of the receivers.
+    /// @param _orderIds The IDs of the orders.
     /// @param total The total amount of USDT L2 to transfer.
     /// @dev Fulfillment exists because ZK proofs that actually *close* the orders
     ///      are published every 60-90 minutes. This means that provider's funds
@@ -167,7 +167,7 @@ interface IUntronCore is IUntronTransfers, IUntronFees, IUntronZK {
     ///      USDT L2.
     ///      Fulfillers take the fee for the service, which depends on complexity of the transfer
     ///      (if it requires a swap or not, what's the chain of the transfer, etc).
-    function fulfill(address[] calldata _receivers, uint256 total) external;
+    function fulfill(bytes32[] calldata _orderIds, uint256 total) external;
 
     /// @notice Closes the orders and sends the funds to the providers or order creators, if not fulfilled.
     /// @param proof The ZK proof.
