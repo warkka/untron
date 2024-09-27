@@ -225,7 +225,7 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
         _providers[_orders[orderId].provider].liquidity += _orders[orderId].size;
 
         // refund the collateral to the order creator
-        internalTransfer(msg.sender, _orders[orderId].collateral);
+        internalTransfer(usdt, msg.sender, _orders[orderId].collateral);
 
         // delete the order because it won't be fulfilled/closed
         // (stopOrder assumes that the order creator sent nothing)
@@ -298,7 +298,7 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
             smartTransfer(order.transfer, amount);
 
             // refund the collateral to the order creator
-            internalTransfer(order.creator, order.collateral);
+            internalTransfer(usdt, order.creator, order.collateral);
 
             // update action chain to free the receiver address
             _freeReceiver(_receivers[i]);
@@ -328,7 +328,7 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
 
         // refund the fulfiller for the USDT L2 that was sent in excess
         if (expectedTotal < total) {
-            internalTransfer(msg.sender, total - expectedTotal);
+            internalTransfer(usdt, msg.sender, total - expectedTotal);
         }
     }
 
@@ -409,7 +409,7 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
             // otherwise refund the collateral to the order creator
             // NOTE: at fulfill() and stopOrder() we set the collateral to 0 so those actions won't lead
             // to slashing even if the order creator sent nothing
-            internalTransfer(minInflow == 0 ? owner() : _orders[orderId].creator, _orders[orderId].collateral);
+            internalTransfer(usdt, minInflow == 0 ? owner() : _orders[orderId].creator, _orders[orderId].collateral);
 
             if (!_orders[orderId].isFulfilled) {
                 // if the order is not fulfilled, update the action chain to free the receiver address
@@ -431,7 +431,7 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
         }
 
         // transfer the fee to the protocol
-        internalTransfer(owner(), totalFee);
+        internalTransfer(usdt, owner(), totalFee);
 
         // emit the RelayUpdated event
         emit RelayUpdated(msg.sender, blockId, latestExecutedAction, stateHash);
@@ -458,7 +458,7 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
             // the provider wants to withdraw the difference
 
             // transfer the difference from the contract to the provider
-            internalTransfer(msg.sender, currentLiquidity - liquidity);
+            internalTransfer(usdt, msg.sender, currentLiquidity - liquidity);
         }
 
         // update the provider's liquidity

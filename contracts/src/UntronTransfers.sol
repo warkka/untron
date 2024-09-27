@@ -114,7 +114,7 @@ abstract contract UntronTransfers is
             if (transfer.fixedOutput) {
                 amount = transfer.minOutputPerUSDT * amount / 1e6 + transfer.acrossFee;
                 require(output >= amount, "Insufficient output amount");
-                internalTransfer(owner(), output - amount);
+                internalTransfer(usdt, owner(), output - amount);
             } else {
                 // if the transfer doesn't require a fixed output amount,
                 // the order creator will receive the entire output amount
@@ -122,16 +122,24 @@ abstract contract UntronTransfers is
             }
         }
 
+        // if we swapped, we send the swapped token, otherwise we send USDT
+        address token = transfer.doSwap ? transfer.outToken : usdt;
+
         // if the transfer is within the same chain, perform an internal transfer
         if (transfer.chainId == chainId()) {
-            internalTransfer(transfer.recipient, amount);
+            internalTransfer(token, transfer.recipient, amount);
         } else {
             // otherwise, perform a cross-chain transfer through the Across bridge.
             // see https://docs.across.to/use-cases/instant-bridging-in-your-application/bridge-integration-guide for reference
+
+            // approving the token to the spoke pool
+            IERC20(token).approve(spokePool, amount);
+
+            // deposit to the spoke pool
             V3SpokePoolInterface(spokePool).depositV3(
                 msg.sender,
                 transfer.recipient,
-                address(usdt),
+                token,
                 address(0),
                 amount,
                 amount - transfer.acrossFee,
@@ -145,13 +153,14 @@ abstract contract UntronTransfers is
         }
     }
 
-    /// @notice perform a native (USDT on ZKsync Era) ERC20 transfer
+    /// @notice perform a native (onchain) ERC20 transfer
+    /// @param token the token address
     /// @param to the recipient address
     /// @param amount the amount of USDT to transfer
-    /// @dev transfers USDT zksync to "to" address.
+    /// @dev transfers ERC20 token to "to" address.
     ///      needed for fulfiller/relayer-related operations and inside the smartTransfer function.
-    function internalTransfer(address to, uint256 amount) internal whenNotPaused {
-        require(IERC20(usdt).transfer(to, amount));
+    function internalTransfer(address token, address to, uint256 amount) internal whenNotPaused {
+        require(IERC20(token).transfer(to, amount));
     }
 
     /// @notice perform a native (USDT on ZKsync Era) ERC20 transferFrom
