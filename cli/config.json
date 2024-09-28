@@ -1,0 +1,6 @@
+{
+    "private_key": "<YOUR_PRIVATE_KEY>",
+    "untron_core_address": "<UNTRON_CORE_CONTRACT_ADDRESS>",
+    "ethereum_rpc": "<ETHEREUM_RPC_URL>",
+    "zksync_rpc": "<ZKSYNC_RPC_URL>"
+}
