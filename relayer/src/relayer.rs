@@ -86,7 +86,7 @@ impl UntronRelayer {
 
             task::spawn(async move {
                 if let Err(e) = fulfiller.run().await {
-                    eprintln!("Fulfiller error: {}", e);
+                    tracing::error!("Fulfiller error: {}", e);
                 }
             });
         }
@@ -96,7 +96,7 @@ impl UntronRelayer {
         let zksync_client_clone = self.zksync_client.clone();
         task::spawn(async move {
             if let Err(e) = zksync_client_clone.start_listener(pending_actions_tx).await {
-                eprintln!("Action listener error: {}", e);
+                tracing::error!("Action listener error: {}", e);
             }
         });
 

@@ -13,3 +13,9 @@ min_fee = 2500000
 [relay]
 proof_interval = 7200 # 2 hours
 min_orders_to_relay = 0
+
+[telegram]
+token = "1234567890:AAEBQADEDEDEDEDEDEDEDEDEDEDEDEDEDE"
+chat_id = "-1012345678901"
+topic_id = "1234"
+critical_prefix = "@useruser important"
