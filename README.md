@@ -13,14 +13,21 @@ The idea behind Untron is described in ["P2P ZK Light Client Bridge between Tron
 ## Repository Structure
 
 - [`cli`](/cli): command line interface for Untron Core, written in Python using zksync2 library.
-- [`contracts`](/contracts): all smart contracts for Untron Core (core logic) and Untron V1 (rate-limited production wrapper). Written in Solidity.
+- [`contracts`](/contracts): all smart contracts for Untron Core.
 - [`lib`](/lib): all imported git submodules. Primarily used in `contracts` and `relayer`.
 - [`program`](/program): ZK program for Untron, implementing Tron consensus verification and transaction scanning. Written in Rust using [SP1](https://github.com/succinctlabs/sp1).
 - [`relayer`](/relayer): relayer and fulfiller for Untron, written in Rust. Relayer generates ZK proofs of the program using the prover network and broadcasts them to the Core. Fulfiller scans the Tron blockchain for new swap deposits and sends the respective outputs to the swap initiator in advance, allowing to execute swaps even before the relayer publishes the ZK proof.
+- [`static`](/static): some static stuff you will come across when reading local READMEs.
+
+### Outside Repositories
+
+- [untron-indexer](https://github.com/ultrasoundlabs/untron-indexer): indexer for Untron Core that allows to easily query the state of the bridge in a programmatic way.
+- [untron-docs](https://github.com/ultrasoundlabs/untron-docs): documentation for Untron [(link to the website)](https://ultrasoundlabs.github.io/untron-docs).
+- [untron-finance](https://github.com/ultrasoundlabs/untron-finance): official frontend for Untron [(link to the website)](https://untron.finance).
 
 ## Architecture & Integrations
 
-If you're interested in integrating Untron into your own project or just want to learn more about how Untron works, please refer to [our documentation](https://docs.untron.finance). The source code for the documentation is available [here](https://github.com/ultrasoundlabs/untron-docs).
+If you're interested in integrating Untron into your own project or just want to learn more about how Untron works, please refer to [our documentation](https://ultrasoundlabs.github.io/untron-docs). The source code for the documentation is available [here](https://github.com/ultrasoundlabs/untron-docs).
 
 We're also looking forward to establishing partnerships with projects and individuals. If you're interested, please get in touch with us at contact@untron.finance, or reach out to the founders of Ultrasound Labs: [Alex Hook](https://github.com/alexhooketh), [Ziemen](https://github.com/ziemen4).
 
