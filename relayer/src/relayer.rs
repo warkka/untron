@@ -6,9 +6,9 @@ use prost::Message;
 use sp1_sdk::SP1Stdin;
 use std::sync::Arc;
 use std::time::SystemTime;
-use tokio::sync::mpsc;
 use tokio::task;
-use tracing::info;
+use tokio::{fs, sync::mpsc};
+use tracing::{info, warn};
 use untron_program::{block_id_to_number, Execution, RawBlock, State};
 
 pub struct UntronRelayer {
@@ -29,8 +29,43 @@ impl UntronRelayer {
             zksync_client.clone(),
         );
 
-        // Reconstruct initial state from the contract
-        let state = State::default(); // TODO: Replace with actual reconstruction logic
+        // Read the latest state from the latest backup file
+        // TODO: Replace this with a proper state reconstruction logic.
+
+        let state = match fs::read_dir("/state").await {
+            Ok(mut entries) => {
+                let mut latest_file = None;
+                let mut latest_modified = None;
+
+                while let Some(entry) = entries.next_entry().await? {
+                    if let Ok(metadata) = entry.metadata().await {
+                        if let Ok(modified) = metadata.modified() {
+                            if latest_modified.map_or(true, |t| modified > t) {
+                                latest_file = Some(entry);
+                                latest_modified = Some(modified);
+                            }
+                        }
+                    }
+                }
+
+                let latest_file = latest_file;
+
+                if let Some(file) = latest_file {
+                    let contents = fs::read(file.path()).await?;
+                    info!("Loading state from backup: {:?}", file.path());
+                    bincode::deserialize(&contents).unwrap_or_else(|_| State::default())
+                } else {
+                    warn!("No state backups found. Using default state.");
+                    State::default()
+                }
+            }
+            Err(_) => {
+                warn!("Failed to read state backups directory. Using default state.");
+                State::default()
+            }
+        };
+
+        info!("State loaded: {:?}", state);
 
         Ok(Self {
             config,
@@ -174,6 +209,12 @@ impl UntronRelayer {
             proven_state = self.state.clone();
 
             info!("Successfully sent proof to the Core; state updated");
+
+            // Backup state in "state" directory
+            let state_backup = bincode::serialize(&proven_state).unwrap();
+            let backup_name = format!("state/state-{}.bin", latest_known_block_number);
+            fs::create_dir_all("state").await?;
+            fs::write(backup_name, state_backup).await?;
 
             // Sleep
 
