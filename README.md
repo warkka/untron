@@ -12,7 +12,9 @@ The idea behind Untron is described in ["P2P ZK Light Client Bridge between Tron
 
 ## Repository Structure
 
+- [`cli`](/cli): command line interface for Untron Core, written in Python using zksync2 library.
 - [`contracts`](/contracts): all smart contracts for Untron Core (core logic) and Untron V1 (rate-limited production wrapper). Written in Solidity.
+- [`lib`](/lib): all imported git submodules. Primarily used in `contracts` and `relayer`.
 - [`program`](/program): ZK program for Untron, implementing Tron consensus verification and transaction scanning. Written in Rust using [SP1](https://github.com/succinctlabs/sp1).
 - [`relayer`](/relayer): relayer and fulfiller for Untron, written in Rust. Relayer generates ZK proofs of the program using the prover network and broadcasts them to the Core. Fulfiller scans the Tron blockchain for new swap deposits and sends the respective outputs to the swap initiator in advance, allowing to execute swaps even before the relayer publishes the ZK proof.
 
