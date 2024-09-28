@@ -17,6 +17,11 @@ import "./UntronZK.sol";
 contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, UntronFees, UntronZK, IUntronCore {
     uint256 constant ORDER_TTL = 300; // 5 minutes
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     /// @notice Initializes the core with the provided parameters.
     /// @param _blockId The ID of the latest ZK proven block of Tron blockchain.
     /// @param _stateHash The state hash of the latest ZK proven block of Tron blockchain.
