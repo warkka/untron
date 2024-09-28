@@ -18,4 +18,5 @@ pgo-data.profdata
 # Env
 .env
 
-Cargo.lock
+**/Cargo.lock
+**/config.toml
