@@ -42,4 +42,4 @@ We would like to acknowledge the projects below whose previous work has been ins
 
 ## License
 
-This project is licensed under the BUSL-1.1 license by Ultrasound Labs LLC. For details, please refer to [LICENSE](/LICENSE).
+This project is licensed under the BUSL-1.1 license by Ultrasound Labs LLC. For details, please refer to [LICENSE](/LICENSE). Some of the project's dependencies are licensed under MIT and Apache-2.0 licenses.

@@ -26,20 +26,19 @@ from zksync2.signer.eth_signer import PrivateKeyEthSigner
 from web3 import Web3
 from eth_account import Account
 from pathlib import Path
+from eth_abi import encode
 
 # Load configuration
 with open('config.json', 'r') as f:
     config = json.load(f)
 
 def initialize_rpc_variables():
-    global UNTRON_CORE_ADDRESS, ZKSYNC_URL, ETHEREUM_URL, zk_web3, eth_web3
+    global UNTRON_CORE_ADDRESS, ZKSYNC_URL, zk_web3
     UNTRON_CORE_ADDRESS = config['untron_core_address']
     ZKSYNC_URL = config['zksync_rpc']
-    ETHEREUM_URL = config['ethereum_rpc']
 
     # Initialize Web3s
     zk_web3 = ZkSyncBuilder.build(ZKSYNC_URL)
-    eth_web3 = Web3(Web3.HTTPProvider(ETHEREUM_URL))
 
 def load_contract_file():
     # Load ABI
@@ -51,7 +50,7 @@ def load_contract_file():
     with open(contract_abi_path, 'r') as abi_file:
         json_file = json.load(abi_file)
         contract_abi = json_file['abi']
-        bytecode = json_file['bytecode']["object"]
+        bytecode = bytes.fromhex(json_file['bytecode']["object"])
     
     return contract_abi, bytecode
 
@@ -59,16 +58,11 @@ def initialize_read_variables():
 
     initialize_rpc_variables()
     global untron_core_contract, untron_encoder
-    contract_abi, _ = load_contract_file()
+    contract_abi, bytecode = load_contract_file()
 
     untron_core_contract = zk_web3.eth.contract(UNTRON_CORE_ADDRESS, abi=contract_abi)
-    untron_encoder = ContractEncoder.from_json(
-        zk_web3, contract_abi
-    )
-
-    untron_core_contract = zk_web3.eth.contract(UNTRON_CORE_ADDRESS, abi=contract_abi)
-    untron_encoder = ContractEncoder.from_json(
-        zk_web3, contract_abi
+    untron_encoder = ContractEncoder(
+        zk_web3, contract_abi, bytecode
     )
 
 def initialize_write_variables():
@@ -79,14 +73,31 @@ def initialize_write_variables():
 
 def deploy_untron(args):
     """
-    Function to deploy the Untron contract.
+    Function to deploy the Untron contract implementation and ERC1967 proxy.
     """
     initialize_rpc_variables()
     initialize_write_variables()
     _, bytecode = load_contract_file()
 
+    # Deploy implementation
+    implementation_address = deploy_implementation(bytecode)
+    print(f"UntronCore implementation deployed at {implementation_address}")
+
+    # Deploy proxy
+    proxy_address = deploy_proxy(implementation_address)
+    print(f"UntronCore proxy deployed at {proxy_address}")
+
+    config['untron_core_address'] = proxy_address
+    with open('config.json', 'w') as f:
+        json.dump(config, f, indent=4)
+    
+    initialize_read_variables() # to allow calls to the contract
+
+    print("Deployment complete.")
+
+def deploy_implementation(bytecode):
     nonce = zk_web3.zksync.get_transaction_count(
-            account.address, ZkBlockParams.COMMITTED.value
+        account.address, EthBlockParams.PENDING.value
     )
     gas_price = zk_web3.zksync.gas_price
     
@@ -98,23 +109,96 @@ def deploy_untron(args):
         gas_limit=0,  # UNKNOWN AT THIS STATE
         gas_price=gas_price,
         bytecode=bytecode,
-        salt=os.urandom(32),
+        max_priority_fee_per_gas=0,
     )
     estimate_gas = zk_web3.zksync.eth_estimate_gas(create_contract.tx)
 
     tx_712 = create_contract.tx712(estimate_gas)
 
-    singed_message = signer.sign_typed_data(tx_712.to_eip712_struct())
-    msg = tx_712.encode(singed_message)
+    signed_message = signer.sign_typed_data(tx_712.to_eip712_struct())
+    msg = tx_712.encode(signed_message)
     tx_hash = zk_web3.zksync.send_raw_transaction(msg)
     tx_receipt = zk_web3.zksync.wait_for_transaction_receipt(
         tx_hash, timeout=240, poll_latency=0.5
     )
 
-    contract_address = tx_receipt["contractAddress"]
+    return tx_receipt["contractAddress"]
 
-    print(f"Untron contract deployed at {contract_address}")
-    print("Receipt: ", tx_receipt)
+def deploy_proxy(implementation_address):
+    # Load ERC1967Proxy ABI and bytecode
+    proxy_abi_path = Path("../contracts/zkout/ERC1967Proxy.sol/ERC1967Proxy.json")
+    if not proxy_abi_path.exists():
+        print("ABI file 'ERC1967Proxy.json' not found.")
+        sys.exit(1)
+
+    with open(proxy_abi_path, 'r') as abi_file:
+        json_file = json.load(abi_file)
+        proxy_abi = json_file['abi']
+        proxy_bytecode = bytes.fromhex(json_file['bytecode']["object"])
+
+    # Encode the initialization data
+    init_data = encode(['address', 'bytes'], [implementation_address, b"\x81\x29\xfc\x1c"]) # initialize()
+
+    nonce = zk_web3.zksync.get_transaction_count(
+        account.address, EthBlockParams.PENDING.value
+    )
+    gas_price = zk_web3.zksync.gas_price
+
+    create_contract = TxCreate2Contract(
+        web3=zk_web3,
+        chain_id=zk_web3.eth.chain_id,
+        nonce=nonce,
+        from_=account.address,
+        gas_limit=0,  # UNKNOWN AT THIS STATE
+        gas_price=gas_price,
+        bytecode=proxy_bytecode,
+        salt=os.urandom(32),
+        call_data=init_data,
+        max_priority_fee_per_gas=0,
+    )
+    estimate_gas = zk_web3.zksync.eth_estimate_gas(create_contract.tx)
+
+    tx_712 = create_contract.tx712(estimate_gas)
+
+    signed_message = signer.sign_typed_data(tx_712.to_eip712_struct())
+    msg = tx_712.encode(signed_message)
+    tx_hash = zk_web3.zksync.send_raw_transaction(msg)
+    tx_receipt = zk_web3.zksync.wait_for_transaction_receipt(
+        tx_hash, timeout=240, poll_latency=0.5
+    )
+
+    return tx_receipt["contractAddress"]
+
+# I'm not yet sure if this is needed
+#
+# def initialize_core():
+#     nonce = zk_web3.zksync.get_transaction_count(
+#         account.address, EthBlockParams.LATEST.value
+#     )
+#     gas_price = zk_web3.zksync.gas_price
+
+#     call_data = untron_encoder.encode_method("initialize", [])
+#     func_call = TxFunctionCall(
+#         chain_id=zk_web3.eth.chain_id,
+#         nonce=nonce,
+#         from_=account.address,
+#         to=UNTRON_CORE_ADDRESS,
+#         data=call_data,
+#         gas_limit=0,  # UNKNOWN AT THIS STATE,
+#         gas_price=gas_price,
+#     )
+#     estimate_gas = zk_web3.zksync.eth_estimate_gas(func_call.tx)
+
+#     tx_712 = func_call.tx712(estimate_gas)
+
+#     singed_message = signer.sign_typed_data(tx_712.to_eip712_struct())
+#     msg = tx_712.encode(singed_message)
+#     tx_hash = zk_web3.zksync.send_raw_transaction(msg)
+#     tx_receipt = zk_web3.zksync.wait_for_transaction_receipt(
+#         tx_hash, timeout=240, poll_latency=0.5
+#     )
+
+#     print(f"Core initialized. Receipt: {tx_receipt}")
 
 def create_order(args):
     initialize_write_variables()
@@ -154,8 +238,8 @@ def create_order(args):
 
     singed_message = signer.sign_typed_data(tx_712.to_eip712_struct())
     msg = tx_712.encode(singed_message)
-    tx_hash = zk_web3.eth.send_raw_transaction(msg)
-    tx_receipt = zk_web3.eth.wait_for_transaction_receipt(
+    tx_hash = zk_web3.zksync.send_raw_transaction(msg)
+    tx_receipt = zk_web3.zksync.wait_for_transaction_receipt(
         tx_hash, timeout=240, poll_latency=0.5
     )
 
@@ -588,6 +672,11 @@ def calculate_fulfiller_total(args):
 def main():
     parser = argparse.ArgumentParser(description='UntronCore CLI')
     subparsers = parser.add_subparsers(title='Commands')
+
+    # DEPLOYMENT FUNCTIONS
+
+    parser_deploy_untron = subparsers.add_parser('deploy', help='Deploy UntronCore contract into a proxy')
+    parser_deploy_untron.set_defaults(func=deploy_untron)
 
     # WRITE FUNCTIONS
 
