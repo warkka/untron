@@ -11,17 +11,23 @@ mod zksync;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
-    tracing::info!("Starting Untron relayer");
 
-    let config_data = fs::read_to_string("config.toml").await?;
-    let config: Config = toml::from_str(&config_data)?;
+    loop {
+        tracing::info!("Starting Untron relayer");
 
-    tracing::info!("Config: {:?}", config);
+        let config_data = fs::read_to_string("config.toml").await?;
+        let config: Config = toml::from_str(&config_data)?;
 
-    let relayer = relayer::UntronRelayer::new(config).await?;
-    tracing::info!("Untron relayer initialized");
+        tracing::info!("Config: {:?}", config);
 
-    relayer.run().await?;
+        let relayer = relayer::UntronRelayer::new(config).await?;
+        tracing::info!("Untron relayer initialized");
 
-    Ok(())
+        tracing::info!("UNTRON THE FINANCE 2024 H00K SOLUTIONS WORLDWIDE");
+        if let Err(e) = relayer.run().await {
+            tracing::error!("Relayer has crashed: {}", e);
+        }
+
+        tracing::info!("Relayer has crashed, restarting...");
+    }
 }
