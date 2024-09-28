@@ -23,46 +23,10 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
     }
 
     /// @notice Initializes the core with the provided parameters.
-    /// @param _blockId The ID of the latest ZK proven block of Tron blockchain.
-    /// @param _stateHash The state hash of the latest ZK proven block of Tron blockchain.
-    /// @param _maxOrderSize The maximum size of the order in USDT L2.
-    /// @param _spokePool The address of the Across bridge's SpokePool contract.
-    /// @param _usdt The address of the USDT token.
-    /// @param _swapper The address of the contract implementing swap logic.
-    /// @param _relayerFee The fee charged by the relayer, in percents.
-    /// @param _feePoint The basic fee point used to calculate the fee per transfer.
-    /// @param _trustedRelayer The address of the trusted relayer (used in case of mock verification)
-    /// @param _verifier The address of the ZK proof verifier.
-    /// @param _vkey The vkey of the ZK program.
-    /// @dev This function grants the DEFAULT_ADMIN_ROLE and UPGRADER_ROLE to the msg.sender.
-    ///      Upgrader role allows to upgrade the contract and dynamic values (see UntronState)
-    function initialize(
-        bytes32 _blockId,
-        bytes32 _stateHash,
-        uint256 _maxOrderSize,
-        address _spokePool,
-        address _usdt,
-        address _swapper,
-        uint256 _relayerFee,
-        uint256 _feePoint,
-        address _trustedRelayer,
-        address _verifier,
-        bytes32 _vkey
-    ) public initializer {
-        // initialize UntronTransfers
-        __UntronTransfers_init(_spokePool, _usdt, _swapper);
-
-        // initialize UntronFees
-        __UntronFees_init(_relayerFee, _feePoint);
-
-        // initialize UntronZK
-        __UntronZK_init(_trustedRelayer, _verifier, _vkey);
-
+    /// @dev This function grants the ownership to msg.sender.
+    ///      Owner can upgrade the contract and dynamic values (see set...Variables functions)
+    function initialize() public initializer {
         _transferOwnership(msg.sender);
-
-        blockId = _blockId;
-        stateHash = _stateHash;
-        maxOrderSize = _maxOrderSize;
     }
 
     // UntronCore variables
