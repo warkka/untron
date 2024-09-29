@@ -102,8 +102,11 @@ interface IUntronCore is IUntronTransfers, IUntronFees, IUntronZK {
 
     function actionChainTip() external view returns (bytes32);
     function actions(bytes32 action) external view returns (bool);
+
+    function genesisState() external view returns (bytes memory);
     function stateHash() external view returns (bytes32);
     function stateUpgradeBlock() external view returns (uint256);
+
     function maxOrderSize() external view returns (uint256);
     function requiredCollateral() external view returns (uint256);
 

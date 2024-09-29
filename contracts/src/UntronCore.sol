@@ -25,8 +25,13 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
     /// @notice Initializes the core with the provided parameters.
     /// @dev This function grants the ownership to msg.sender.
     ///      Owner can upgrade the contract and dynamic values (see set...Variables functions)
-    function initialize() public initializer {
+    function initialize(bytes calldata state) public initializer {
         _transferOwnership(msg.sender);
+
+        // initialize genesis state
+        genesisState = state;
+        stateHash = sha256(state);
+        stateUpgradeBlock = block.number;
     }
 
     // Action is an act of triggering the receiver address
@@ -36,9 +41,12 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
     // actions is a mapping if the action has ever been created.
     mapping(bytes32 => bool) public actions;
 
-    // State is a mapping of all account balances in the Untron protocol.
-    // Whenever the state is updated, the state upgrade block is set to the current block number.
+    // State is an internal record of all Tron blockchain data and Untron orders used by the ZK program.
+    // It's a bincode-serialized State Rust struct. The genesis state is stored in genesisState for easy reconstruction.
+    // Whenever the state is updated, its hash is set in stateHash,
+    // and the state upgrade block is set to the current block number.
     // The state is updated by the relayer whenever a new ZK proof of the program is executed.
+    bytes public genesisState;
     bytes32 public stateHash;
     // stateUpgradeBlock is the ZKsync Era block number when the state was last updated.
     uint256 public stateUpgradeBlock;
