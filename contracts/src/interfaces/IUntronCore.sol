@@ -88,11 +88,11 @@ interface IUntronCore is IUntronTransfers, IUntronFees, IUntronZK {
     event OrderClosed(bytes32 indexed orderId, address relayer);
     event RelayUpdated(address relayer, bytes32 newBlockId, bytes32 newLatestClosedOrder, bytes32 newStateHash);
     event ProviderUpdated(
-        address indexed provider, 
-        uint256 liquidity, 
-        uint256 rate, 
-        uint256 minOrderSize, 
-        uint256 minDeposit, 
+        address indexed provider,
+        uint256 liquidity,
+        uint256 rate,
+        uint256 minOrderSize,
+        uint256 minDeposit,
         address[] receivers
     );
     event ReceiverFreed(address provider, address receiver);
@@ -106,6 +106,7 @@ interface IUntronCore is IUntronTransfers, IUntronFees, IUntronZK {
     function actionChainTip() external view returns (bytes32);
     function latestExecutedAction() external view returns (bytes32);
     function stateHash() external view returns (bytes32);
+    function stateUpgradeBlock() external view returns (uint256);
     function maxOrderSize() external view returns (uint256);
     function requiredCollateral() external view returns (uint256);
 

@@ -34,6 +34,7 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
     bytes32 public actionChainTip;
     bytes32 public latestExecutedAction;
     bytes32 public stateHash;
+    uint256 public stateUpgradeBlock;
     uint256 public maxOrderSize;
     uint256 public requiredCollateral;
 
@@ -50,6 +51,7 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
         actionChainTip = _actionChainTip;
         latestExecutedAction = _latestExecutedAction;
         stateHash = _stateHash;
+        stateUpgradeBlock = block.number;
         maxOrderSize = _maxOrderSize;
         requiredCollateral = _requiredCollateral;
     }
@@ -402,6 +404,9 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
 
         // transfer the fee to the protocol
         internalTransfer(usdt, owner(), totalFee);
+
+        // update the state upgrade block
+        stateUpgradeBlock = block.number;
 
         // emit the RelayUpdated event
         emit RelayUpdated(msg.sender, blockId, latestExecutedAction, stateHash);
