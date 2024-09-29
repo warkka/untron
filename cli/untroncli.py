@@ -200,6 +200,83 @@ def deploy_proxy(implementation_address):
 
 #     print(f"Core initialized. Receipt: {tx_receipt}")
 
+def deploy_mock_usdt(args):
+    initialize_rpc_variables()
+    initialize_write_variables()
+
+    nonce = zk_web3.zksync.get_transaction_count(
+        account.address, EthBlockParams.PENDING.value
+    )
+    gas_price = zk_web3.zksync.gas_price
+    
+    contract_file = json.load(open(Path("../contracts/zkout/UntronCore.t.sol/MockUSDT.json")))
+    contract_bytecode = bytes.fromhex(contract_file["bytecode"]["object"])
+    create_contract = TxCreateContract(
+        web3=zk_web3,
+        chain_id=zk_web3.eth.chain_id,
+        nonce=nonce,
+        from_=account.address,
+        gas_limit=0,  # UNKNOWN AT THIS STATE
+        gas_price=gas_price,
+        bytecode=contract_bytecode,
+        max_priority_fee_per_gas=0,
+    )
+    estimate_gas = zk_web3.zksync.eth_estimate_gas(create_contract.tx)
+
+    tx_712 = create_contract.tx712(estimate_gas)
+
+    signed_message = signer.sign_typed_data(tx_712.to_eip712_struct())
+    msg = tx_712.encode(signed_message)
+    tx_hash = zk_web3.zksync.send_raw_transaction(msg)
+    tx_receipt = zk_web3.zksync.wait_for_transaction_receipt(
+        tx_hash, timeout=240, poll_latency=0.5
+    )
+
+    contract_address = tx_receipt["contractAddress"]
+    print("Deployed mock USDT at", contract_address)
+
+def mint_mock_usdt(args):
+    initialize_rpc_variables()
+    initialize_write_variables()
+
+    nonce = zk_web3.zksync.get_transaction_count(
+        account.address, EthBlockParams.PENDING.value
+    )
+    gas_price = zk_web3.zksync.gas_price
+
+    contract_file = json.load(open(Path("../contracts/zkout/UntronCore.t.sol/MockUSDT.json")))
+    contract_abi = contract_file["abi"]
+    contract_bytecode = bytes.fromhex(contract_file["bytecode"]["object"])
+    
+    mock_usdt_encoder = ContractEncoder(
+        zk_web3, contract_abi, contract_bytecode
+    )
+
+    call_data = mock_usdt_encoder.encode_method("mint", [account.address, 1_000_000_000])
+    func_call = TxFunctionCall(
+        chain_id=zk_web3.eth.chain_id,
+        nonce=nonce,
+        from_=account.address,
+        to=args.address,
+        data=call_data,
+        gas_limit=0,  # UNKNOWN AT THIS STATE,
+        gas_price=gas_price,
+        max_priority_fee_per_gas=0,
+    )
+    estimate_gas = zk_web3.zksync.eth_estimate_gas(func_call.tx)
+
+    tx_712 = func_call.tx712(estimate_gas)
+
+    singed_message = signer.sign_typed_data(tx_712.to_eip712_struct())
+    msg = tx_712.encode(singed_message)
+    tx_hash = zk_web3.zksync.send_raw_transaction(msg)
+    tx_receipt = zk_web3.zksync.wait_for_transaction_receipt(
+        tx_hash, timeout=240, poll_latency=0.5
+    )
+
+    print(f"Transaction sent. Receipt: {tx_receipt}")
+    print("Minted 1000 USDT to", account.address)
+
 def create_order(args):
     initialize_write_variables()
     provider_address = Web3.to_checksum_address(args.provider)
@@ -231,6 +308,7 @@ def create_order(args):
         data=call_data,
         gas_limit=0,  # UNKNOWN AT THIS STATE,
         gas_price=gas_price,
+        max_priority_fee_per_gas=0,
     )
     estimate_gas = zk_web3.zksync.eth_estimate_gas(func_call.tx)
 
@@ -267,6 +345,7 @@ def set_provider(args):
         data=call_data,
         gas_limit=0,  # UNKNOWN AT THIS STATE,
         gas_price=gas_price,
+        max_priority_fee_per_gas=0,
     )
     estimate_gas = zk_web3.zksync.eth_estimate_gas(func_call.tx)
 
@@ -312,6 +391,7 @@ def change_order(args):
         data=call_data,
         gas_limit=0,
         gas_price=gas_price,
+        max_priority_fee_per_gas=0,
     )
     estimate_gas = zk_web3.zksync.eth_estimate_gas(func_call.tx)
     tx_712 = func_call.tx712(estimate_gas)
@@ -345,6 +425,7 @@ def stop_order(args):
         data=call_data,
         gas_limit=0,
         gas_price=gas_price,
+        max_priority_fee_per_gas=0,
     )
     estimate_gas = zk_web3.zksync.eth_estimate_gas(func_call.tx)
     tx_712 = func_call.tx712(estimate_gas)
@@ -379,6 +460,7 @@ def fulfill(args):
         data=call_data,
         gas_limit=0,
         gas_price=gas_price,
+        max_priority_fee_per_gas=0,
     )
     estimate_gas = zk_web3.zksync.eth_estimate_gas(func_call.tx)
     tx_712 = func_call.tx712(estimate_gas)
@@ -414,6 +496,7 @@ def close_orders(args):
         data=call_data,
         gas_limit=0,
         gas_price=gas_price,
+        max_priority_fee_per_gas=0,
     )
     estimate_gas = zk_web3.zksync.eth_estimate_gas(func_call.tx)
     tx_712 = func_call.tx712(estimate_gas)
@@ -449,6 +532,7 @@ def set_zk_variables(args):
         data=call_data,
         gas_limit=0,
         gas_price=gas_price,
+        max_priority_fee_per_gas=0,
     )
     estimate_gas = zk_web3.zksync.eth_estimate_gas(func_call.tx)
     tx_712 = func_call.tx712(estimate_gas)
@@ -484,6 +568,7 @@ def set_transfers_variables(args):
         data=call_data,
         gas_limit=0,
         gas_price=gas_price,
+        max_priority_fee_per_gas=0,
     )
     estimate_gas = zk_web3.zksync.eth_estimate_gas(func_call.tx)
     tx_712 = func_call.tx712(estimate_gas)
@@ -518,6 +603,7 @@ def set_fees_variables(args):
         data=call_data,
         gas_limit=0,
         gas_price=gas_price,
+        max_priority_fee_per_gas=0,
     )
     estimate_gas = zk_web3.zksync.eth_estimate_gas(func_call.tx)
     tx_712 = func_call.tx712(estimate_gas)
@@ -563,6 +649,7 @@ def set_core_variables(args):
         data=call_data,
         gas_limit=0,
         gas_price=gas_price,
+        max_priority_fee_per_gas=0,
     )
     estimate_gas = zk_web3.zksync.eth_estimate_gas(func_call.tx)
     tx_712 = func_call.tx712(estimate_gas)
@@ -678,7 +765,14 @@ def main():
     parser_deploy_untron = subparsers.add_parser('deploy', help='Deploy UntronCore contract into a proxy')
     parser_deploy_untron.set_defaults(func=deploy_untron)
 
+    parser_deploy_mock_usdt = subparsers.add_parser('deployMockUSDT', help='Deploy MockUSDT contract and mint 1000 USDT to the account')
+    parser_deploy_mock_usdt.set_defaults(func=deploy_mock_usdt)
+
     # WRITE FUNCTIONS
+
+    parser_mint_mock_usdt = subparsers.add_parser('mintMockUSDT', help='Mint 1000 MockUSDT to the account')
+    parser_mint_mock_usdt.add_argument('--address', required=True, help='MockUSDT contract address')
+    parser_mint_mock_usdt.set_defaults(func=mint_mock_usdt)
 
     # createOrder command
     parser_create_order = subparsers.add_parser('createOrder', help='Create a new order (WRITE FUNCTION)')
