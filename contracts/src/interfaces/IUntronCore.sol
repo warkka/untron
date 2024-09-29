@@ -11,8 +11,6 @@ import "./IUntronFees.sol";
 interface IUntronCore is IUntronTransfers, IUntronFees, IUntronZK {
     /// @notice Struct representing a Tron->L2 order in the Untron protocol
     struct Order {
-        // the tip of the action chain before this order was created
-        bytes32 parent;
         // the timestamp of the order
         uint256 timestamp;
         // the creator of the order (will send USDT Tron)
@@ -86,7 +84,7 @@ interface IUntronCore is IUntronTransfers, IUntronFees, IUntronZK {
     );
     event OrderFulfilled(bytes32 indexed orderId, address fulfiller);
     event OrderClosed(bytes32 indexed orderId, address relayer);
-    event RelayUpdated(address relayer, bytes32 newBlockId, bytes32 newLatestClosedOrder, bytes32 newStateHash);
+    event RelayUpdated(address relayer, bytes32 stateHash);
     event ProviderUpdated(
         address indexed provider,
         uint256 liquidity,
@@ -102,28 +100,17 @@ interface IUntronCore is IUntronTransfers, IUntronFees, IUntronZK {
     function receiverOwners(address receiver) external view returns (address);
     function orders(bytes32 orderId) external view returns (Order memory);
 
-    function blockId() external view returns (bytes32);
     function actionChainTip() external view returns (bytes32);
-    function latestExecutedAction() external view returns (bytes32);
+    function actions(bytes32 action) external view returns (bool);
     function stateHash() external view returns (bytes32);
     function stateUpgradeBlock() external view returns (uint256);
     function maxOrderSize() external view returns (uint256);
     function requiredCollateral() external view returns (uint256);
 
     /// @notice Updates the UntronCore-related variables
-    /// @param _blockId The new block ID of the latest zk proven Tron block
-    /// @param _actionChainTip The new action chain tip
-    /// @param _latestExecutedAction The new latest performed action from the action chain
-    /// @param _stateHash The new hash of the latest state of Untron ZK program
+    /// @param _maxOrderSize The new maximum size of an order that can be created
     /// @param _requiredCollateral The new required collateral for creating an order
-    function setCoreVariables(
-        bytes32 _blockId,
-        bytes32 _actionChainTip,
-        bytes32 _latestExecutedAction,
-        bytes32 _stateHash,
-        uint256 _maxOrderSize,
-        uint256 _requiredCollateral
-    ) external;
+    function setCoreVariables(uint256 _maxOrderSize, uint256 _requiredCollateral) external;
 
     /// @notice The order creation function
     /// @param provider The address of the liquidity provider owning the Tron receiver address.

@@ -29,29 +29,28 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
         _transferOwnership(msg.sender);
     }
 
-    // UntronCore variables
-    bytes32 public blockId;
+    // Action is an act of triggering the receiver address
+    // in the ZK program's state. It can be either order creation or order stop.
+    // actionChain is a hash chain of all actions ever performed.
     bytes32 public actionChainTip;
-    bytes32 public latestExecutedAction;
+    // actions is a mapping if the action has ever been created.
+    mapping(bytes32 => bool) public actions;
+
+    // State is a mapping of all account balances in the Untron protocol.
+    // Whenever the state is updated, the state upgrade block is set to the current block number.
+    // The state is updated by the relayer whenever a new ZK proof of the program is executed.
     bytes32 public stateHash;
+    // stateUpgradeBlock is the ZKsync Era block number when the state was last updated.
     uint256 public stateUpgradeBlock;
+
+    // maxOrderSize is the maximum size of an order that can be created, in USDT Tron.
     uint256 public maxOrderSize;
+    // requiredCollateral is the amount of USDT L2 that must be sent with the order to create it.
+    // It can then be claimed back if the order is properly closed.
     uint256 public requiredCollateral;
 
     /// @inheritdoc IUntronCore
-    function setCoreVariables(
-        bytes32 _blockId,
-        bytes32 _actionChainTip,
-        bytes32 _latestExecutedAction,
-        bytes32 _stateHash,
-        uint256 _maxOrderSize,
-        uint256 _requiredCollateral
-    ) external onlyOwner {
-        blockId = _blockId;
-        actionChainTip = _actionChainTip;
-        latestExecutedAction = _latestExecutedAction;
-        stateHash = _stateHash;
-        stateUpgradeBlock = block.number;
+    function setCoreVariables(uint256 _maxOrderSize, uint256 _requiredCollateral) external onlyOwner {
         maxOrderSize = _maxOrderSize;
         requiredCollateral = _requiredCollateral;
     }
@@ -98,7 +97,7 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
     /// @param minDeposit The minimum deposit amount.
     /// @return _actionChainTip The new action chain tip.
     /// @dev must only be used in _createOrder and _freeReceiver
-    function updateActionChain(address receiver, uint256 minDeposit, uint256 size)
+    function _updateActionChain(address receiver, uint256 minDeposit, uint256 size)
         internal
         returns (bytes32 _actionChainTip)
     {
@@ -113,6 +112,17 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
 
         // actionChainTip stores the latest action (aka order id), that is, the tip of the action chain.
         actionChainTip = _actionChainTip;
+        // mark the action as created
+        actions[_actionChainTip] = true;
+    }
+
+    /// @notice Performs an illegitimate action chain update.
+    /// @param receiver The address of the receiver.
+    /// @param minDeposit The minimum deposit amount.
+    /// @param size The order size.
+    /// @dev The caller must be an owner. This function must only be used in case of a bug in the system.
+    function updateActionChain(address receiver, uint256 minDeposit, uint256 size) external onlyOwner {
+        _updateActionChain(receiver, minDeposit, size);
     }
 
     /// @inheritdoc IUntronCore
@@ -145,17 +155,14 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
         // subtract the amount from the provider's liquidity
         _providers[provider].liquidity -= amount;
 
-        // get the previous action
-        bytes32 prevAction = latestExecutedAction;
         // create the order ID and update the action chain.
         // order ID is the tip of the action chain when the order was created.
-        bytes32 orderId = updateActionChain(receiver, providerMinDeposit, size);
+        bytes32 orderId = _updateActionChain(receiver, providerMinDeposit, size);
         // set the receiver as busy to prevent double orders
         _isReceiverBusy[receiver] = orderId;
         uint256 timestamp = unixToTron(block.timestamp);
         // store the order details in storage
         _orders[orderId] = Order({
-            parent: prevAction,
             timestamp: timestamp,
             creator: msg.sender,
             provider: provider,
@@ -314,42 +321,24 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
         verifyProof(proof, publicValues);
 
         (
-            // old block ID must be the latest block ID that was ZK proven (blockId)
-            bytes32 oldBlockId,
-            // new block ID is the new latest (zk proven) block ID of Tron blockchain
-            // all blocks revealed by the ZK proof are finalized in the Tron network
-            bytes32 newBlockId,
-            // "previous executed action" is the latest action that was executed in the previous run
-            // of the ZK program. (latestExecutedAction)
-            bytes32 prevExecutedAction,
-            // "new executed action" is the latest action from the action chain that was executed in the current run
-            // of the ZK program. it's not necessarily the latest action chain (action chain tip)
-            // because the relayer might have executed some older actions that do not include the latest ones.
-            // However, the new executed action must have been the action chain tip at some point.
-            bytes32 newExecutedAction,
             // old state hash is the state print from the previous run of the ZK program. (stateHash)
             bytes32 oldStateHash,
             // new state hash is the state print from the new run of the ZK program.
             bytes32 newStateHash,
+            // the latest action that was included in the program's inputs (must have been the tip in the SC at some point)
+            bytes32 latestIncludedAction,
             // closed orders are the orders that are being closed in this run of the ZK program.
             Inflow[] memory closedOrders
-        ) = abi.decode(publicValues, (bytes32, bytes32, bytes32, bytes32, bytes32, bytes32, Inflow[]));
+        ) = abi.decode(publicValues, (bytes32, bytes32, bytes32, Inflow[]));
 
-        // check that the old block ID is the latest block ID that was ZK proven (blockId)
-        require(oldBlockId == blockId, "Public input block id is not the latest ZK proven block id");
-        // check that the latest (onchain) executed action is the previous executed action
-        require(
-            prevExecutedAction == latestExecutedAction,
-            "Public input previous executed action is not the latest ZK proven action"
-        );
         // check that the old state hash is equal to the current state hash
         // this is needed to prevent the relayer from modifying the state in the ZK program.
         require(oldStateHash == stateHash);
 
-        // update the block ID, latest closed order and state hash
-        blockId = newBlockId;
-        latestExecutedAction = newExecutedAction;
+        // update the state hash
         stateHash = newStateHash;
+
+        require(actions[latestIncludedAction], "Latest included action is invalid");
 
         // this variable is used to calculate the total fee that the protocol owner (DAO) will receiver for relayer services
         uint256 totalFee;
@@ -409,7 +398,7 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
         stateUpgradeBlock = block.number;
 
         // emit the RelayUpdated event
-        emit RelayUpdated(msg.sender, blockId, latestExecutedAction, stateHash);
+        emit RelayUpdated(msg.sender, stateHash);
     }
 
     /// @inheritdoc IUntronCore
@@ -487,7 +476,7 @@ contract UntronCore is Initializable, OwnableUpgradeable, UntronTransfers, Untro
         // set the receiver as not busy
         _isReceiverBusy[receiver] = bytes32(0);
         // update the action chain with closure action
-        updateActionChain(receiver, 0, 0);
+        _updateActionChain(receiver, 0, 0);
         // Emit ReceiverFreed event
         emit ReceiverFreed(_receiverOwners[receiver], receiver);
     }
